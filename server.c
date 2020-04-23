@@ -97,9 +97,8 @@ int main(int argc, char *argv[])
                 }       
                 
             }
-        }//seg fault anrwa sw wnreE NO IF
-         if(clientsockets[1] != 0 && clientsockets[2] != 0){
-             printf("aqui");
+        }
+         //if(clientsockets[1] != 0 && clientsockets[0] != 0){
              if ( FD_ISSET( clientsockets[1] , &readfds)){   
                 //Input/Output bytes length
                 int iosize = 0;
@@ -112,9 +111,9 @@ int main(int argc, char *argv[])
                     error("ERROR reading from socket");
                 
                 printf("1: %s\n", buffer);
-                send(clientsockets[2] , buffer , strlen(buffer) , 0 );
+                send(clientsockets[0] , buffer , strlen(buffer) , 0 );
             }  
-            if (FD_ISSET( clientsockets[2] , &readfds)){   
+            if (FD_ISSET( clientsockets[0] , &readfds)){   
                     //Input/Output bytes length
                 int iosize = 0;
                 memset(buffer, 0, BUFFER_SIZE);
@@ -128,7 +127,7 @@ int main(int argc, char *argv[])
                 printf("2: %s\n", buffer);
                 send(clientsockets[1] , buffer , strlen(buffer) , 0 );
             }
-        }
+        //}
          
     }
 
