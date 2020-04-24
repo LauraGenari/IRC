@@ -79,6 +79,7 @@ int main(int argc, char const* argv[]) {
 #include <unistd.h>
 #include <string>
 #include <iostream>
+#include <signal.h>
 
 void *recvmg(void *my_sock) {
   int sock = *((int *)my_sock);
@@ -91,13 +92,16 @@ void *recvmg(void *my_sock) {
     //std::cout << msg;
   }
 }
-
 int main(int argc, char *argv[]) {
   pthread_t recvt;
   int len;
   int sock;
   struct sockaddr_in ServerIp;
   std::string client_name;
+
+  if(argc < 3){
+    printf("insira seu username e a PORT");
+  }
 
   client_name = argv[1];
   //strcpy(client_name, argv[1]);
@@ -117,18 +121,55 @@ int main(int argc, char *argv[]) {
   pthread_create(&recvt, NULL, recvmg, &sock);
 
   // ready to read a message from console
-  char msg[4096];
+    char msg[4096];
+    std::string send_msg;
+    while (fgets(msg,4096 - client_name.size(), stdin) > 0) {
+      send_msg = '\n'+ client_name + ": " + msg;
+      len = write(sock, send_msg.c_str(), send_msg.length());
+      if (len < 0){
+        std::cout << "\nWarning: Message not sent!\n";
+      }
+    }
+
+
+  // thread is closed
+  pthread_join(recvt, NULL);
+  close(sock);
+  
+  system("pause");
+  return 0;
+}
+
+
+/*
+char msg[4096];
   std::string send_msg;
-  while (fgets(msg, 4096, stdin) > 0) {
+  int i;
+  char buffer = fgetc(stdin);
+  while(buffer != EOF){
+    i = 0;
+    while ( buffer != '\n') {
+      msg[i] = buffer;
+      buffer = fgetc(stdin);
+      i++;
+      if(i==4095){
+        msg[i]='\0';
+        send_msg = client_name + ": " + msg;
+        len = write(sock, send_msg.c_str(), send_msg.length());
+        if (len < 0){
+          std::cout << "\nWarning: Message not sent!\n";
+        }
+        i=0;
+      }
+    }
+    msg[i]='\0';
     send_msg = client_name + ": " + msg;
     len = write(sock, send_msg.c_str(), send_msg.length());
     if (len < 0){
       std::cout << "\nWarning: Message not sent!\n";
     }
+    fflush(stdin);
+    buffer = fgetc(stdin);
   }
 
-  // thread is closed
-  pthread_join(recvt, NULL);
-  close(sock);
-  return 0;
-}
+*/
