@@ -47,27 +47,31 @@ int main(int argc, char *argv[])
     //copia o PORT para a estrutura de socket do server
     serv_addr.sin_port = htons(PORT);
     printf("%s", server->h_addr_list[0]);
+    
     //conecta o socket ao server
     if (connect(sockfd, (struct sockaddr*) &serv_addr, sizeof(serv_addr)) < 0) 
         error("ERROR connecting");
     
-    printf("Please enter the message: ");
+    //Conexao sucedida, comecar troca de mensagens
+    printf("Comece a se falar\n");
+    while(1){
+        memset(buffer, 0, BUFFER_SIZE);
+        //guarda a mensagem no buffer
+        fgets(buffer, BUFFER_SIZE-1, stdin);
+        
+        //escreve a mensagem no socket
+        n = write(sockfd, buffer, strlen(buffer));
+        if (n < 0) 
+            error("ERROR writing to socket");
+        
+        memset(buffer, 0, BUFFER_SIZE);
+        //le a mensagem do socket
+        n = read(sockfd, buffer, BUFFER_SIZE-1);
+        if (n < 0) 
+            error("ERROR reading from socket");
+    }
     
-    memset(buffer, 0, BUFFER_SIZE);
 
-    //guarda a mensagem no buffer
-    fgets(buffer, BUFFER_SIZE-1, stdin);
-    
-    //escreve a mensagem no socket
-    n = write(sockfd,buffer,strlen(buffer));
-    if (n < 0) 
-        error("ERROR writing to socket");
-    
-    memset(buffer, 0, BUFFER_SIZE);
-    //le a mensagem do socket
-    n = read(sockfd, buffer, BUFFER_SIZE-1);
-    if (n < 0) 
-         error("ERROR reading from socket");
-    printf("%s\n",buffer);
+
     return 0;
 }
