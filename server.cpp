@@ -1,10 +1,12 @@
-#include <arpa/inet.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <errno.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <signal.h>
 #include <vector>
 #include <iostream>
 
@@ -31,22 +33,15 @@ void sendtoall(char *msg, int curr) {
   pthread_mutex_unlock(&mutex);
 }
 
-void *recvmg(void *client_sock) {
-  int sock = ((Client*)client_sock)->sockfd;
-  char msg[4096] = {0};
-  int len;
+void add_client(Client* new_client);
+void remove_client(int sockfd);
 
-  while ((len = recv(sock, msg, 4095, 0)) > 0) {
-    msg[len] = '\0';
-    sendtoall(msg, sock);
-  }
-
-}
+void *recvmg(void *client_sock);
 
 int main(int argc, char *argv[]) {
   struct sockaddr_in ServerIp;
   pthread_t recvt;
-  int sock = 0, Client_sock = 0;
+  int sock = 0, client_fd = 0;
 
   ServerIp.sin_family = AF_INET;
   ServerIp.sin_port = htons(atoi(argv[1]));
@@ -54,26 +49,65 @@ int main(int argc, char *argv[]) {
   
   sock = socket(AF_INET, SOCK_STREAM, 0);
 
-  if (bind(sock, (struct sockaddr *)&ServerIp, sizeof(ServerIp)) == -1)
+  if (bind(sock, (struct sockaddr *)&ServerIp, sizeof(ServerIp)) == -1){
     perror("bind: ");
+    exit(EXIT_FAILURE);
+  }
   else
     std::cout << "Server Started" << std::endl;
 
-  if (listen(sock, 20) == -1) 
+  if (listen(sock, 20) == -1){
     perror("listen: ");
+    exit(EXIT_FAILURE);
+  }
 
   while (1) {
-    if ((Client_sock = accept(sock, (struct sockaddr *)NULL, NULL)) < 0)
+    if ((client_fd = accept(sock, (struct sockaddr *)NULL, NULL)) < 0){
       perror("accept: ");
+    }
 
-    pthread_mutex_lock(&mutex);
-    //clients[n] = Client_sock;
     Client* new_client = (Client*) malloc(sizeof(Client));
-    new_client->sockfd = Client_sock;
-    clients.push_back(new_client);
-    // creating a thread for each client
-    pthread_create(&recvt, NULL, recvmg, &Client_sock);
-    pthread_mutex_unlock(&mutex);
+    new_client->sockfd = client_fd;
+    
+    add_client(new_client);
+
+    pthread_create(&recvt, NULL, &recvmg, (void*)new_client);
   }
   return 0;
+}
+
+void add_client(Client* new_client){
+    pthread_mutex_lock(&mutex);
+    clients.push_back(new_client);
+    pthread_mutex_unlock(&mutex);
+}
+
+void remove_client(int sockfd){
+    pthread_mutex_lock(&mutex);
+    //Find client to be removed, swap with the end, remove from the end.
+    for(int i = 0; i < clients.size(); i++){
+      if(clients[i]->sockfd == sockfd){
+        Client* c = clients[i];
+        clients[i] = clients.back();
+        clients.pop_back();
+        break;
+      }
+    }
+    pthread_mutex_unlock(&mutex);
+}
+
+void *recvmg(void *client_sock) {
+  int sock = ((Client*)client_sock)->sockfd;
+  char msg[4096] = {0};
+  int len;
+
+  while ((len = recv(sock, msg, 4095, 0)) > 0) {
+    msg[len] = '\0';
+    //Tratar /quit
+    sendtoall(msg, sock);
+  }
+
+  remove_client(sock);
+  close(sock);
+  return NULL;
 }
