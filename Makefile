@@ -1,5 +1,5 @@
 server: serverTest.cpp
-	g++ serverTest.cpp -o server -pthread
+	g++ server.cpp -o server -pthread
 
 client: clientTest.cpp
-	g++ clientTest.cpp -o client -pthread
+	g++ client.cpp -o client -pthread
