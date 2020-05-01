@@ -13,7 +13,7 @@
 #define EMPTY_FLAG 0x0000
 
 int flag;
-
+//function that receives a messagem from server
 void *recvmg(void *my_sock) {
   int sock = *((int *)my_sock);
   int len;
@@ -23,12 +23,10 @@ void *recvmg(void *my_sock) {
   while ((len = recv(sock, msg, 4096, 0)) > 0) {
     msg[len] = '\0';
     fputs(msg, stdout);
-    // if(flag == STOP_FLAG)
-    //   break;
   }
   return NULL;
 }
-
+//function that advise the correct manner to quit
 void interrupt_handler(int signo, siginfo_t *sinfo, void *context){
   std::cout << "\nPlease use the '/quit' command to leave\n";
 }
@@ -52,8 +50,7 @@ int main(int argc, char *argv[]) {
   }
 
   client_name = argv[1];
-  //strcpy(client_name, argv[1]);
-  
+  //socket configuration
   sock = socket(AF_INET, SOCK_STREAM, 0);
   
   ServerIp.sin_port = htons(atoi(argv[2]));
@@ -89,47 +86,9 @@ int main(int argc, char *argv[]) {
     }
   }
   printf("BROKEN\n");
-  // thread is closed
-  //pthread_join(recvt, NULL);
-  //printf("JOINED\n");
+
   close(sock);
   printf("CLOSED\n");
   
   return 0;
 }
-
-
-/*
-EU TROXA CODANDO NA MAO SENDO Q O FEGTS JA FAZ O TRABALHO MAS N 
-VO APAGAR PQ DEU UM PUTA TRABALHO, MSM NAO FUNCIONANDO
-char msg[4096];
-  std::string send_msg;
-  int i;
-  char buffer = fgetc(stdin);
-  while(buffer != EOF){
-    i = 0;
-    while ( buffer != '\n') {
-      msg[i] = buffer;
-      buffer = fgetc(stdin);
-      i++;
-      if(i==4095){
-        msg[i]='\0';
-        send_msg = client_name + ": " + msg;
-        len = write(sock, send_msg.c_str(), send_msg.length());
-        if (len < 0){
-          std::cout << "\nWarning: Message not sent!\n";
-        }
-        i=0;
-      }
-    }
-    msg[i]='\0';
-    send_msg = client_name + ": " + msg;
-    len = write(sock, send_msg.c_str(), send_msg.length());
-    if (len < 0){
-      std::cout << "\nWarning: Message not sent!\n";
-    }
-    fflush(stdin);
-    buffer = fgetc(stdin);
-  }
-
-*/

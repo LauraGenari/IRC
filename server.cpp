@@ -18,6 +18,7 @@ typedef struct client{
 
 std::vector<Client*> clients;
 
+//function that sends a message received by server to all clients
 void sendtoall(char *msg, int curr) {
   pthread_mutex_lock(&mutex);
   for (auto it = clients.begin(); it != clients.end(); it++) {
@@ -43,6 +44,7 @@ int main(int argc, char *argv[]) {
   pthread_t recvt;
   int sock = 0, client_fd = 0;
 
+  //socket configuration
   ServerIp.sin_family = AF_INET;
   ServerIp.sin_port = htons(atoi(argv[1]));
   ServerIp.sin_addr.s_addr = inet_addr("127.0.0.1");
@@ -56,11 +58,13 @@ int main(int argc, char *argv[]) {
   else
     std::cout << "Server Started" << std::endl;
 
+  //set socket in a passive mode that waits a client conection
   if (listen(sock, 20) == -1){
     perror("listen: ");
     exit(EXIT_FAILURE);
   }
 
+  //adds a client and waits a message
   while (1) {
     if ((client_fd = accept(sock, (struct sockaddr *)NULL, NULL)) < 0){
       perror("accept: ");
@@ -76,12 +80,14 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
+//function that adds client
 void add_client(Client* new_client){
     pthread_mutex_lock(&mutex);
     clients.push_back(new_client);
     pthread_mutex_unlock(&mutex);
 }
 
+//funciton that removes client
 void remove_client(int sockfd){
     pthread_mutex_lock(&mutex);
     //Find client to be removed, swap with the end, remove from the end.
@@ -95,7 +101,7 @@ void remove_client(int sockfd){
     }
     pthread_mutex_unlock(&mutex);
 }
-
+//function that receives a messagem from client
 void *recvmg(void *client_sock) {
   int sock = ((Client*)client_sock)->sockfd;
   char msg[4096] = {0};
@@ -103,7 +109,7 @@ void *recvmg(void *client_sock) {
 
   while ((len = recv(sock, msg, 4095, 0)) > 0) {
     msg[len] = '\0';
-    //Tratar /quit
+    //hancles /quit
     sendtoall(msg, sock);
   }
 
