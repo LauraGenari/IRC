@@ -2,10 +2,15 @@
 #define _IRC_H_
 
 #define BUFFER_SIZE 4096
-void error(char *msg)
+#define DEBUG_MODE false
+
+namespace IRC{
+
+void error(std::string msg)
 {
-    perror(msg);
-    exit(1);
+    perror(msg.c_str());
+    exit(EXIT_FAILURE);
 }
 
+}
 #endif
