@@ -10,6 +10,8 @@
 #include <vector>
 #include <iostream>
 
+#include "irc.h"
+
 pthread_mutex_t mutex;
 
 typedef struct client{
@@ -21,12 +23,14 @@ std::vector<Client*> clients;
 //function that sends a message received by server to all clients
 void sendtoall(char *msg, int curr) {
   pthread_mutex_lock(&mutex);
+  //Iterate through all clients
   for (auto it = clients.begin(); it != clients.end(); it++) {
-    std::cout << (*it)->sockfd << std::endl;
+    if(DEBUG_MODE) std::cout << (*it)->sockfd << std::endl; 
     int fd = (*it)->sockfd;
+    //Send message to client if its not the one who wrote it
     if (fd != curr) {
       if (send(fd, msg, strlen(msg), 0) < 0) {
-        perror("send: ");
+        perror("send");
         continue;
       }
     }
@@ -52,42 +56,41 @@ int main(int argc, char *argv[]) {
   sock = socket(AF_INET, SOCK_STREAM, 0);
 
   if (bind(sock, (struct sockaddr *)&ServerIp, sizeof(ServerIp)) == -1){
-    perror("bind: ");
-    exit(EXIT_FAILURE);
-  }
+    IRC::error("bind");
+  } 
   else
     std::cout << "Server Started" << std::endl;
 
-  //set socket in a passive mode that waits a client conection
+  //set socket in a passive mode that waits a client connection
   if (listen(sock, 20) == -1){
-    perror("listen: ");
-    exit(EXIT_FAILURE);
+    IRC::error("listen");
   }
 
-  //adds a client and waits a message
+  //Accept new client and create thread for receiving messages
   while (1) {
     if ((client_fd = accept(sock, (struct sockaddr *)NULL, NULL)) < 0){
-      perror("accept: ");
+      perror("accept");
     }
 
     Client* new_client = (Client*) malloc(sizeof(Client));
     new_client->sockfd = client_fd;
     
     add_client(new_client);
-
     pthread_create(&recvt, NULL, &recvmg, (void*)new_client);
+    char connection_message[] = "\nServer: A client has joined\n";
+    sendtoall(connection_message, client_fd);
   }
   return 0;
 }
 
-//function that adds client
+//function that adds client to list
 void add_client(Client* new_client){
     pthread_mutex_lock(&mutex);
     clients.push_back(new_client);
     pthread_mutex_unlock(&mutex);
 }
 
-//funciton that removes client
+//funciton that removes client from list
 void remove_client(int sockfd){
     pthread_mutex_lock(&mutex);
     //Find client to be removed, swap with the end, remove from the end.
@@ -101,18 +104,31 @@ void remove_client(int sockfd){
     }
     pthread_mutex_unlock(&mutex);
 }
-//function that receives a messagem from client
+
+//function that receives a message from client
 void *recvmg(void *client_sock) {
   int sock = ((Client*)client_sock)->sockfd;
-  char msg[4096] = {0};
+  char msg[BUFFER_SIZE] = {0};
   int len;
 
-  while ((len = recv(sock, msg, 4095, 0)) > 0) {
+  //Receive message
+  while ((len = recv(sock, msg, BUFFER_SIZE, 0)) > 0) {
     msg[len] = '\0';
-    //hancles /quit
-    sendtoall(msg, sock);
+    //Handle /quit command
+    std::string command = msg;
+    if(command.find("/quit") == std::string::npos){
+      sendtoall(msg, sock);
+    }
+    else{
+      //Send quit message to all and break while
+      if(DEBUG_MODE) sprintf(msg, "Server: %d has quit\n", sock);
+      else sprintf(msg, "Server: A client has quit\n");
+      sendtoall(msg, sock);
+      break;
+    }
   }
 
+  //Remove Client, close connection and end thread
   remove_client(sock);
   close(sock);
   return NULL;
