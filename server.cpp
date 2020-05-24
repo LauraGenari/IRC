@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <vector>
+#include <unordered_map>
 #include <iostream>
 
 #include "irc.h"
@@ -16,36 +17,51 @@ pthread_mutex_t mutex;
 
 typedef struct client{
   int sockfd;
-}Client;
+  pthread_t tid;
+} Client;
+
+struct tinfo{
+  int fd;
+  char* msg;
+};
 
 std::vector<Client*> clients;
+//Hashmap for finding clients via its socket file descriptor
+// Key: client->sockfd | Value: client
+std::unordered_map<int, Client*> clients_hash = std::unordered_map<int, Client*>();
+
+void add_client(Client* new_client);
+void remove_client(int sockfd);
+void* send_client_msg(void* sockfd_msg);
+void* recvmg(void *client_sock);
 
 //function that sends a message received by server to all clients
 void sendtoall(char *msg, int curr) {
   pthread_mutex_lock(&mutex);
+
+  pthread_t send_msgt;
+
   //Iterate through all clients
   for (auto it = clients.begin(); it != clients.end(); it++) {
     if(DEBUG_MODE) std::cout << (*it)->sockfd << std::endl; 
     int fd = (*it)->sockfd;
     //Send message to client if its not the one who wrote it
     if (fd != curr) {
-      if (send(fd, msg, strlen(msg), 0) < 0) {
-        perror("send");
-        continue;
-      }
+      struct tinfo* info = new struct tinfo;
+      info->fd = fd;
+      info->msg = msg;
+      pthread_create(&send_msgt, NULL, &send_client_msg, (void*)info);
     }
   }
   pthread_mutex_unlock(&mutex);
 }
 
-void add_client(Client* new_client);
-void remove_client(int sockfd);
 
-void *recvmg(void *client_sock);
 
 int main(int argc, char *argv[]) {
   struct sockaddr_in ServerIp;
   pthread_t recvt;
+
   int sock = 0, client_fd = 0;
 
   //socket configuration
@@ -71,12 +87,19 @@ int main(int argc, char *argv[]) {
     if ((client_fd = accept(sock, (struct sockaddr *)NULL, NULL)) < 0){
       perror("accept");
     }
-
+    //Create client struct in memory
     Client* new_client = (Client*) malloc(sizeof(Client));
     new_client->sockfd = client_fd;
     
+    //Add to hashmap and vector
     add_client(new_client);
+
+    //Create thread for receiving client's messages
     pthread_create(&recvt, NULL, &recvmg, (void*)new_client);
+    //Assign thread_id to client
+    new_client->tid = recvt;
+
+    //Send connection message to all clients on server
     char connection_message[] = "\nServer: A client has joined\n";
     sendtoall(connection_message, client_fd);
   }
@@ -87,6 +110,7 @@ int main(int argc, char *argv[]) {
 void add_client(Client* new_client){
     pthread_mutex_lock(&mutex);
     clients.push_back(new_client);
+    clients_hash[new_client->sockfd] = new_client;
     pthread_mutex_unlock(&mutex);
 }
 
@@ -99,6 +123,8 @@ void remove_client(int sockfd){
         Client* c = clients[i];
         clients[i] = clients.back();
         clients.pop_back();
+        //close client's file descriptor
+        close(sockfd);
         break;
       }
     }
@@ -127,9 +153,67 @@ void *recvmg(void *client_sock) {
       break;
     }
   }
-
+  printf("Server: %d has quit\n", sock);
   //Remove Client, close connection and end thread
   remove_client(sock);
-  close(sock);
+  return NULL;
+}
+
+void* send_client_msg(void* sockfd_msg)
+{
+  //Get params
+  int fd = ((struct tinfo*) sockfd_msg)->fd;
+  char* msg = ((struct tinfo*) sockfd_msg)->msg;
+
+  // ? apagar
+  if(DEBUG_MODE) std::cout << "send_client_msg: sending to " << fd << msg << std::endl;
+  //Get client's thread id
+  // ? e' operacao de leitura, entao nao e' pra da deadlock, neh ?
+  pthread_mutex_lock(&mutex);
+  pthread_t tid;
+  auto c = clients_hash.find(fd);
+  if(c == clients_hash.end()){
+    // ? apagar
+    if(DEBUG_MODE) std::cout << "send_client_msg: no such client with fd " << fd << std::endl;
+  }
+  else{
+    tid = c->second->tid;
+  }
+  pthread_mutex_unlock(&mutex);
+
+  int num_fails = 0;
+  
+  //Send message and wait for confirmation
+  while(num_fails < 5)
+  {
+    //Sent sucessfully
+    if (send(fd, msg, strlen(msg), 0) > 0) 
+    {
+      break;
+    }
+    //Increament failure
+    else
+    {
+      num_fails++;
+      // ? apagar
+      if(DEBUG_MODE) std::cout << "send_client_msg: failed" << num_fails << std::endl; 
+    }
+  }
+
+  //Disconnect client if more than 5 failed tries
+  if(num_fails >= 5)
+  {
+    if(!pthread_cancel(tid))
+    {
+      remove_client(fd);
+    }
+    else
+    {
+      perror("send_client_msg: no thread with this id found");
+    }
+  }
+  
+
+  //End thread
   return NULL;
 }
