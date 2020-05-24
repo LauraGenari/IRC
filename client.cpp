@@ -44,9 +44,17 @@ int connectUser(string *client_name) {
   string command = "";
   cout << "Bem vindo ao IRC!\nPara iniciar digite o comando /connect seguido de seu usuário!" << endl;
   cin >> command >> *client_name;
+  if(cin.eof()){
+    cout << "Thank you for using our IRC, hope you enjoyed your experience!\n";
+    exit(0);
+  }
   while (command != "/connect") {
     cout << "Erro!\nDigite /connect seguido de seu usuário para iniciar!" << endl;
     cin >> command >> *client_name;
+    if (cin.eof()) {
+      cout << "Thank you for using our IRC, hope you enjoyed your experience!\n";
+      exit(0);
+    }
   }
 
   cout << "Conectando ....." << endl;
