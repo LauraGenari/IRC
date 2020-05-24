@@ -14,11 +14,13 @@
 
 #include "irc.h"
 
+using namespace std;
+
 pthread_mutex_t mutex;
 
 typedef struct client {
   int sockfd;
-  std::string nick;
+  string nick;
   pthread_t tid;
 } Client;
 
@@ -27,11 +29,11 @@ struct tinfo {
   char* msg;
 };
 
-std::vector<Client*> clients;
+vector<Client*> clients;
 // Hashmap for finding clients via its socket file descriptor
 // Key: client->sockfd | Value: client
-std::unordered_map<int, Client*> clients_hash =
-    std::unordered_map<int, Client*>();
+unordered_map<int, Client*> clients_hash =
+    unordered_map<int, Client*>();
 
 void add_client(Client* new_client);
 void remove_client(int sockfd);
@@ -46,7 +48,7 @@ void sendtoall(char* msg, int curr) {
 
   // Iterate through all clients
   for (auto it = clients.begin(); it != clients.end(); it++) {
-    if (DEBUG_MODE) std::cout << (*it)->sockfd << std::endl;
+    if (DEBUG_MODE) cout << (*it)->sockfd << endl;
     int fd = (*it)->sockfd;
     // Send message to client if its not the one who wrote it
     if (fd != curr) {
@@ -75,7 +77,7 @@ int main(int argc, char* argv[]) {
   if (bind(sock, (struct sockaddr*)&ServerIp, sizeof(ServerIp)) == -1) {
     IRC::error("bind");
   } else
-    std::cout << "Server Started" << std::endl;
+    cout << "Server Started" << endl;
 
   // set socket in a passive mode that waits a client connection
   if (listen(sock, 20) == -1) {
@@ -141,11 +143,11 @@ void* recvmg(void* client_sock) {
   while ((len = recv(sock, msg, BUFFER_SIZE, 0)) > 0) {
     msg[len] = '\0';
     // Handle /quit command
-    std::string command = msg;
-    if (command.find("/quit\n") == std::string::npos &&
-        command.find("/ping\n") == std::string::npos) {
+    string command = msg;
+    if (command.find("/quit\n") == string::npos &&
+        command.find("/ping\n") == string::npos) {
       sendtoall(msg, sock);
-    } else if (command.find("/quit\n") != std::string::npos) {
+    } else if (command.find("/quit\n") != string::npos) {
       // Send quit message to all and break while
       if (DEBUG_MODE)
         sprintf(msg, "Server: %d has quit\n", sock);
@@ -153,7 +155,7 @@ void* recvmg(void* client_sock) {
         sprintf(msg, "Server: A client has quit\n");
       sendtoall(msg, sock);
       break;
-    } else if (command.find("/ping\n") != std::string::npos) {
+    } else if (command.find("/ping\n") != string::npos) {
       // Handle ping message
       struct tinfo* pongMsg = new struct tinfo;
       pongMsg->fd = sock;
@@ -176,8 +178,8 @@ void* send_client_msg(void* sockfd_msg) {
 
   // ? apagar
   if (DEBUG_MODE)
-    std::cout << "send_client_msg: sending to " << fd << " " << msg
-              << std::endl;
+    cout << "send_client_msg: sending to " << fd << " " << msg
+              << endl;
   // Get client's thread id
   // ? e' operacao de leitura, entao nao e' pra da deadlock, neh ?
   pthread_mutex_lock(&mutex);
@@ -186,8 +188,8 @@ void* send_client_msg(void* sockfd_msg) {
   if (c == clients_hash.end()) {
     // ? apagar
     if (DEBUG_MODE)
-      std::cout << "send_client_msg: no such client with fd " << fd
-                << std::endl;
+      cout << "send_client_msg: no such client with fd " << fd
+                << endl;
   } else {
     tid = c->second->tid;
   }
@@ -200,7 +202,7 @@ void* send_client_msg(void* sockfd_msg) {
     num_fails++;
     // ? apagar
     if (DEBUG_MODE)
-      std::cout << "send_client_msg: failed" << num_fails << std::endl;
+      cout << "send_client_msg: failed" << num_fails << endl;
   }
 
   // Disconnect client if more than 5 failed tries
