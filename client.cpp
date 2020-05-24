@@ -78,7 +78,7 @@ int main(int argc, char *argv[]) {
   sigaction(SIGINT, &act, NULL);
   signal(SIGINT, SIG_IGN);*/
 
-  signal(SIGINT, interrupt_handler);
+  signal(SIGINT, SIG_IGN);
 
   /*if (argc < 3) {
     cout << "Modo de uso: " << argv[0] << " nome PORT" << endl;
