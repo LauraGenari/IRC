@@ -37,13 +37,13 @@ void interrupt_handler(int signo) {
   cout << "\nPlease use the '/quit' command to leave\n";
 }
 
-
 // Sets client_name and connects client to server, returns socket Id
 int connectUser(string *client_name) {
   struct sockaddr_in ServerIp;
   string command = "";
   cout << "Bem vindo ao IRC!\nPara iniciar digite o comando /connect seguido de seu usuário!" << endl;
   cin >> command >> *client_name;
+  //handles ctrl+d
   if(cin.eof()){
     cout << "Thank you for using our IRC, hope you enjoyed your experience!\n";
     exit(0);
@@ -51,6 +51,7 @@ int connectUser(string *client_name) {
   while (command != "/connect") {
     cout << "Erro!\nDigite /connect seguido de seu usuário para iniciar!" << endl;
     cin >> command >> *client_name;
+    //handles ctrl+d
     if (cin.eof()) {
       cout << "Thank you for using our IRC, hope you enjoyed your experience!\n";
       exit(0);
@@ -98,9 +99,12 @@ int main(int argc, char *argv[]) {
   char msg[BUFFER_SIZE];
   string send_msg;
   int len;
-  while (fgets(msg, BUFFER_SIZE - client_name.size(), stdin) > 0) {
+  while (fgets(msg, BUFFER_SIZE - client_name.size(), stdin) != NULL) {
+    
     // Format and send message to server
-    send_msg = '\n' + client_name + ": " + msg;
+    if( msg[0] != '\n')
+      send_msg = '\n' + client_name + ": " + msg;
+  
     len = write(sock, send_msg.c_str(), send_msg.length());
     if (len < 0) {
       cout << "\nWarning: Message not sent!\n";
@@ -114,6 +118,7 @@ int main(int argc, char *argv[]) {
       cout << "Thank you for using our IRC, hope you enjoyed your experience!\n";
       break;
     }
+    send_msg[0] = '\0';
   }
 
   close(sock);
