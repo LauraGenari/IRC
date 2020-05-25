@@ -9,13 +9,10 @@ Instruções de uso:
 Abra uma janela do terminal:
     -make server (compila o servidor)
     -make client (compila o cliente)
-    -make start (inicia o servidor)
+    -make startServer (inicia o servidor)
 
 Em uma nova janela do terminal
-    -make mary (adiciona o cliente Mary)
-
-Em uma nova janela do terminal
-    -make john (adiciona o cliente John)
+    -make startClient (adiciona um cliente)
 
 Opcionalmente
     - voce pode iniciar o server em outra PORT com ./server PORT, sendo PORT o numero da porta.
