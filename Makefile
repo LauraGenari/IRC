@@ -4,11 +4,8 @@ server: server.cpp
 client: client.cpp
 	g++ client.cpp -o client -pthread
 
-john: 
-	./client john 2000
+startClient: 
+	./client 2000
 
-mary:
-	./client mary 2000
-
-start:
+startServer:
 	./server 2000
