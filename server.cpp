@@ -29,34 +29,15 @@ struct tinfo {
   char* msg;
 };
 
-vector<Client*> clients;
 // Hashmap for finding clients via its socket file descriptor
 // Key: client->sockfd | Value: client
-unordered_map<int, Client*> clients_hash = unordered_map<int, Client*>();
+unordered_map<int, Client*> clients = unordered_map<int, Client*>();
 
 void add_client(Client* new_client);
 void remove_client(int sockfd);
+void sendtoall(char* msg, int curr);
 void* send_client_msg(void* sockfd_msg);
 void* recvmg(void* client_sock);
-
-// function that sends a message received by server to all clients
-void sendtoall(char* msg, int curr) {
-  pthread_mutex_lock(&mutex);
-
-  pthread_t send_msgt;
-
-  // Iterate through all clients
-  for (auto it = clients.begin(); it != clients.end(); it++) {
-    if (DEBUG_MODE) cout << (*it)->sockfd << endl;
-    int fd = (*it)->sockfd;
-    // Send message to client if its not the one who wrote it
-    struct tinfo* info = new struct tinfo;
-    info->fd = fd;
-    info->msg = msg;
-    pthread_create(&send_msgt, NULL, &send_client_msg, (void*)info);
-  }
-  pthread_mutex_unlock(&mutex);
-}
 
 int main(int argc, char* argv[]) {
   struct sockaddr_in ServerIp;
@@ -104,30 +85,49 @@ int main(int argc, char* argv[]) {
   return 0;
 }
 
-// function that adds client to list
+/*===== Map Operations =====*/
+
+// function that adds client to map
 void add_client(Client* new_client) {
   pthread_mutex_lock(&mutex);
-  clients.push_back(new_client);
-  clients_hash[new_client->sockfd] = new_client;
+  clients[new_client->sockfd] = new_client;
   pthread_mutex_unlock(&mutex);
 }
 
-// funciton that removes client from list
+// funciton that removes client from map
 void remove_client(int sockfd) {
   pthread_mutex_lock(&mutex);
   // Find client to be removed, swap with the end, remove from the end.
-  for (int i = 0; i < clients.size(); i++) {
-    if (clients[i]->sockfd == sockfd) {
-      Client* c = clients[i];
-      clients[i] = clients.back();
-      clients.pop_back();
-      // close client's file descriptor
-      close(sockfd);
-      break;
-    }
+  auto c = clients.find(sockfd);
+  if (c != clients.end()) {
+    clients.erase(c);
+    close(sockfd);
   }
   pthread_mutex_unlock(&mutex);
 }
+
+/*===== Server Commons =====*/
+
+// function that sends a message received by server to all clients
+void sendtoall(char* msg, int curr) {
+  pthread_mutex_lock(&mutex);
+
+  pthread_t send_msgt;
+
+  // Iterate through all clients
+  for (auto it = clients.begin(); it != clients.end(); it++) {
+    if (DEBUG_MODE) cout << it->first << endl;
+    int fd = it->first;
+    // Send message to client if its not the one who wrote it
+    struct tinfo* info = new struct tinfo;
+    info->fd = fd;
+    info->msg = msg;
+    pthread_create(&send_msgt, NULL, &send_client_msg, (void*)info);
+  }
+  pthread_mutex_unlock(&mutex);
+}
+
+/*===== Thread Funcs =====*/
 
 // function that receives a message from client
 void* recvmg(void* client_sock) {
@@ -181,25 +181,23 @@ void* recvmg(void* client_sock) {
   return NULL;
 }
 
+//Function that sends message to client
 void* send_client_msg(void* sockfd_msg) {
   // Get params
   int fd = ((struct tinfo*)sockfd_msg)->fd;
   char* msg = ((struct tinfo*)sockfd_msg)->msg;
-
-  // ? apagar
-  if (DEBUG_MODE)
-    cout << "send_client_msg: sending to " << fd << " " << msg << endl;
-  // Get client's thread id
-  // ? e' operacao de leitura, entao nao e' pra da deadlock, neh ?
-  pthread_mutex_lock(&mutex);
   pthread_t tid;
-  auto c = clients_hash.find(fd);
-  if (c == clients_hash.end()) {
-    // ? apagar
-    if (DEBUG_MODE)
-      cout << "send_client_msg: no such client with fd " << fd << endl;
-  } else {
+
+  // Get client's thread id
+  pthread_mutex_lock(&mutex);
+  auto c = clients.find(fd);
+  if (c != clients.end()) {
     tid = c->second->tid;
+  } else {
+    if(DEBUG_MODE) 
+      printf("send_client_msg: client fd not found");
+    pthread_mutex_unlock(&mutex);
+    return NULL;
   }
   pthread_mutex_unlock(&mutex);
 
@@ -217,7 +215,7 @@ void* send_client_msg(void* sockfd_msg) {
     if (!pthread_cancel(tid)) {
       remove_client(fd);
     } else {
-      perror("send_client_msg: no thread with this id found");
+      IRC::error("send_client_msg:");
     }
   }
 

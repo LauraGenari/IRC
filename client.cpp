@@ -32,6 +32,7 @@ void *recvmg(void *my_sock) {
   }
   return NULL;
 }
+
 // function that advise the correct manner to quit -- WIP
 void interrupt_handler(int signo) {
   cout << "\nPlease use the '/quit' command to leave\n";
@@ -45,7 +46,7 @@ int connectUser(string *client_name) {
   cin >> command >> *client_name;
   //handles ctrl+d
   if(cin.eof()){
-    cout << "Thank you for using our IRC, hope you enjoyed your experience!\n";
+    cout << "Obrigado por usar nosso IRC, espero que tenha se divertido!\n";
     exit(0);
   }
   while (command != "/connect") {
@@ -53,7 +54,7 @@ int connectUser(string *client_name) {
     cin >> command >> *client_name;
     //handles ctrl+d
     if (cin.eof()) {
-      cout << "Thank you for using our IRC, hope you enjoyed your experience!\n";
+      cout << "Obrigado por usar nosso IRC, espero que tenha se divertido!\n";
       exit(0);
     }
   }
@@ -73,7 +74,7 @@ int connectUser(string *client_name) {
   //Sends name to server to register nick
   int len = write(sock, (*client_name).c_str(), (*client_name).length());
   if (len < 0) {
-    cout << "\nWarning: Message not sent!\n";
+    cout << "\nWarning: Mensagem nao enviada!\n";
   }
 
   system("clear");
@@ -110,17 +111,19 @@ int main(int argc, char *argv[]) {
       cout << "\nWarning: Message not sent!\n";
     }
     // Compare with commands and execute if true
-    if (!strncmp(msg, "/quit\n", 6)) {
+    string command = msg;
+    if (command.find("/quit\n") != string::npos) {
       flag = STOP_FLAG;
     }
     // Test flag
     if (flag == STOP_FLAG) {
-      cout << "Thank you for using our IRC, hope you enjoyed your experience!\n";
       break;
     }
     send_msg[0] = '\0';
   }
 
+  cout << "Obrigado por usar nosso IRC, espero que tenha se divertido!\n";
+  //Close socket fd
   close(sock);
   return 0;
 }
