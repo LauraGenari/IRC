@@ -69,6 +69,12 @@ int connectUser(string *client_name) {
   if ((connect(sock, (struct sockaddr *)&ServerIp, sizeof(ServerIp))) == -1) {
     IRC::error("connect");
   }
+  //Sends name to server to register nick
+  int len = write(sock, (*client_name).c_str(), (*client_name).length());
+  if (len < 0) {
+    cout << "\nWarning: Message not sent!\n";
+  }
+
   system("clear");
   return sock;
 }
@@ -79,18 +85,7 @@ int main(int argc, char *argv[]) {
   string client_name;
 
   // Signal handling
-  /*struct sigaction act;
-  memset(&act, 0, sizeof(struct sigaction));
-  act.sa_sigaction = interrupt_handler;
-  act.sa_flags = SA_SIGINFO;
-  sigaction(SIGINT, &act, NULL);
-  signal(SIGINT, SIG_IGN);*/
-
   signal(SIGINT, SIG_IGN);
-
-  /*if (argc < 3) {
-    cout << "Modo de uso: " << argv[0] << " nome PORT" << endl;
-  }*/
 
   int sock = connectUser(&client_name);
 

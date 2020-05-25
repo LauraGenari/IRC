@@ -32,8 +32,7 @@ struct tinfo {
 vector<Client*> clients;
 // Hashmap for finding clients via its socket file descriptor
 // Key: client->sockfd | Value: client
-unordered_map<int, Client*> clients_hash =
-    unordered_map<int, Client*>();
+unordered_map<int, Client*> clients_hash = unordered_map<int, Client*>();
 
 void add_client(Client* new_client);
 void remove_client(int sockfd);
@@ -51,12 +50,10 @@ void sendtoall(char* msg, int curr) {
     if (DEBUG_MODE) cout << (*it)->sockfd << endl;
     int fd = (*it)->sockfd;
     // Send message to client if its not the one who wrote it
-    if (fd != curr) {
-      struct tinfo* info = new struct tinfo;
-      info->fd = fd;
-      info->msg = msg;
-      pthread_create(&send_msgt, NULL, &send_client_msg, (void*)info);
-    }
+    struct tinfo* info = new struct tinfo;
+    info->fd = fd;
+    info->msg = msg;
+    pthread_create(&send_msgt, NULL, &send_client_msg, (void*)info);
   }
   pthread_mutex_unlock(&mutex);
 }
@@ -102,8 +99,7 @@ int main(int argc, char* argv[]) {
     new_client->tid = recvt;
 
     // Send connection message to all clients on server
-    char connection_message[] = "\nServer: A client has joined\n";
-    sendtoall(connection_message, client_fd);
+    
   }
   return 0;
 }
@@ -135,9 +131,25 @@ void remove_client(int sockfd) {
 
 // function that receives a message from client
 void* recvmg(void* client_sock) {
-  int sock = ((Client*)client_sock)->sockfd;
+  Client* client = (Client*)client_sock;
+  int sock = client->sockfd;
   char msg[BUFFER_SIZE] = {0};
   int len;
+
+  // Receive client name
+  if (recv(sock, msg, BUFFER_SIZE, 0) > 0){
+    client->nick = msg;
+  }
+  else {
+    // Remove Client, close connection and end thread
+    remove_client(sock);
+    return NULL;
+  }
+  
+  //Send join message to all clients
+  char* connection_message = new char[32];
+  sprintf(connection_message, "\nServer: %s has joined\n", client->nick.c_str());
+  sendtoall(connection_message, sock);
 
   // Receive message
   while ((len = recv(sock, msg, BUFFER_SIZE, 0)) > 0) {
@@ -148,12 +160,7 @@ void* recvmg(void* client_sock) {
         command.find("/ping\n") == string::npos) {
       sendtoall(msg, sock);
     } else if (command.find("/quit\n") != string::npos) {
-      // Send quit message to all and break while
-      if (DEBUG_MODE)
-        sprintf(msg, "Server: %d has quit\n", sock);
-      else
-        sprintf(msg, "Server: A client has quit\n");
-      sendtoall(msg, sock);
+      // break while
       break;
     } else if (command.find("/ping\n") != string::npos) {
       // Handle ping message
@@ -165,7 +172,10 @@ void* recvmg(void* client_sock) {
       send_client_msg((void*)pongMsg);
     }
   }
-  printf("Server: %d has quit\n", sock);
+  // Send disconnect message to all
+  char* disconnect_msg = new char[32];
+  sprintf(disconnect_msg, "Server: %s has quit\n", client->nick.c_str());
+  sendtoall(disconnect_msg, sock);
   // Remove Client, close connection and end thread
   remove_client(sock);
   return NULL;
@@ -178,8 +188,7 @@ void* send_client_msg(void* sockfd_msg) {
 
   // ? apagar
   if (DEBUG_MODE)
-    cout << "send_client_msg: sending to " << fd << " " << msg
-              << endl;
+    cout << "send_client_msg: sending to " << fd << " " << msg << endl;
   // Get client's thread id
   // ? e' operacao de leitura, entao nao e' pra da deadlock, neh ?
   pthread_mutex_lock(&mutex);
@@ -188,8 +197,7 @@ void* send_client_msg(void* sockfd_msg) {
   if (c == clients_hash.end()) {
     // ? apagar
     if (DEBUG_MODE)
-      cout << "send_client_msg: no such client with fd " << fd
-                << endl;
+      cout << "send_client_msg: no such client with fd " << fd << endl;
   } else {
     tid = c->second->tid;
   }
@@ -201,8 +209,7 @@ void* send_client_msg(void* sockfd_msg) {
   while (num_fails < 5 && send(fd, msg, strlen(msg), 0) < 0) {
     num_fails++;
     // ? apagar
-    if (DEBUG_MODE)
-      cout << "send_client_msg: failed" << num_fails << endl;
+    if (DEBUG_MODE) cout << "send_client_msg: failed" << num_fails << endl;
   }
 
   // Disconnect client if more than 5 failed tries
