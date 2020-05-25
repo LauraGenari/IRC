@@ -19,9 +19,9 @@ Opcionalmente
     - voce pode iniciar a aplicacao cliente com outro nome com ./client nome port, sendo port a porta que o servidor esta aberto(por padrao 2000) e nome o nome com o qual voce se conectara.
 
 Orientacoes para a aplicacao cliente:
-    -Apos iniciar o cliente, digite sua mensagem e aperte enter para enviar.
-    -Todos que estão conectados ao server irao receber sua mensagem.
-    -Envie uma mensagem com o comando '/quit' para se desconectar do server e encerrar a aplicacao.
+    -Apos iniciar o cliente, digite /connect e seu username e aperte enter para se conectar.
+    -Todos que estão conectados ao server irao receber as mensagens que você enviar.
+    -Envie uma mensagem com o comando '/quit' para se desconectar do server e encerrar a aplicacao, ou use ctrl+d.
 
 Orientacoes para a aplicacao servidor:
     -Use ctrl+c para encerrar o servidor.
