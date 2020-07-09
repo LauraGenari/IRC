@@ -42,17 +42,20 @@ void interrupt_handler(int signo) {
 int connectUser(string *client_name) {
   struct sockaddr_in ServerIp;
   string command = "";
-  cout << "Bem vindo ao IRC!\nPara iniciar digite o comando /connect seguido de seu usuário!" << endl;
+  cout << "Bem vindo ao IRC!\nPara iniciar digite o comando /connect seguido "
+          "de seu usuário!"
+       << endl;
   cin >> command >> *client_name;
-  //handles ctrl+d
-  if(cin.eof()){
+  // handles ctrl+d
+  if (cin.eof()) {
     cout << "Obrigado por usar nosso IRC, espero que tenha se divertido!\n";
     exit(0);
   }
   while (command != "/connect") {
-    cout << "Erro!\nDigite /connect seguido de seu usuário para iniciar!" << endl;
+    cout << "Erro!\nDigite /connect seguido de seu usuário para iniciar!"
+         << endl;
     cin >> command >> *client_name;
-    //handles ctrl+d
+    // handles ctrl+d
     if (cin.eof()) {
       cout << "Obrigado por usar nosso IRC, espero que tenha se divertido!\n";
       exit(0);
@@ -71,8 +74,22 @@ int connectUser(string *client_name) {
   if ((connect(sock, (struct sockaddr *)&ServerIp, sizeof(ServerIp))) == -1) {
     IRC::error("connect");
   }
-  //Sends name to server to register nick
-  int len = write(sock, (*client_name).c_str(), (*client_name).length());
+  cout << "Utilize o comando /join seguido do nome do canal para entrar em um "
+          "canal!\n";
+  string canal;
+  cin >> command >> canal;
+  //TODO --> VALIDAR NOME DO CANAL
+  while (command != "/join") {
+    cout << "Erro!\nUtilize o comando /join seguido do nome do canal para "
+            "entrar em um canal!\n";
+    cin >> command >> canal;
+  }
+  string nickAndChannel = (*client_name);
+  nickAndChannel.append("$");
+  nickAndChannel.append(canal);
+
+  // Sends name to server to register nick
+  int len = write(sock, nickAndChannel.c_str(), nickAndChannel.length());
   if (len < 0) {
     cout << "\nWarning: Mensagem nao enviada!\n";
   }
@@ -101,11 +118,9 @@ int main(int argc, char *argv[]) {
   string send_msg;
   int len;
   while (fgets(msg, BUFFER_SIZE - client_name.size(), stdin) != NULL) {
-    
     // Format and send message to server
-    if( msg[0] != '\n')
-      send_msg = '\n' + client_name + ": " + msg;
-  
+    if (msg[0] != '\n') send_msg = '\n' + client_name + ": " + msg;
+
     len = write(sock, send_msg.c_str(), send_msg.length());
     if (len < 0) {
       cout << "\nWarning: Message not sent!\n";
@@ -123,7 +138,7 @@ int main(int argc, char *argv[]) {
   }
 
   cout << "Obrigado por usar nosso IRC, espero que tenha se divertido!\n";
-  //Close socket fd
+  // Close socket fd
   close(sock);
   return 0;
 }

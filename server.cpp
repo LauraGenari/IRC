@@ -22,7 +22,16 @@ typedef struct client {
   int sockfd;
   string nick;
   pthread_t tid;
+  bool isMuted;
+  string currChanelName;
 } Client;
+
+typedef struct channel{
+  unordered_map<int, Client*> clients;
+  int id;
+  string name;
+  int adm; //admin's sockfd 
+} Channel;
 
 struct tinfo {
   int fd;
@@ -32,6 +41,10 @@ struct tinfo {
 // Hashmap for finding clients via its socket file descriptor
 // Key: client->sockfd | Value: client
 unordered_map<int, Client*> clients = unordered_map<int, Client*>();
+
+// Channel Hashmap
+// Key: client->currChanelName | Value: channel
+unordered_map<string, Channel*> channels = unordered_map<string, Channel*>();
 
 void add_client(Client* new_client);
 void remove_client(int sockfd);
@@ -51,7 +64,8 @@ int main(int argc, char* argv[]) {
   ServerIp.sin_addr.s_addr = inet_addr("127.0.0.1");
 
   sock = socket(AF_INET, SOCK_STREAM, 0);
-
+  int option = 1;
+  setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
   if (bind(sock, (struct sockaddr*)&ServerIp, sizeof(ServerIp)) == -1) {
     IRC::error("bind");
   } else
@@ -70,12 +84,15 @@ int main(int argc, char* argv[]) {
     // Create client struct in memory
     Client* new_client = (Client*)malloc(sizeof(Client));
     new_client->sockfd = client_fd;
+    new_client->isMuted = false;
+    
+
+    // Create thread for receiving client's messages
+    pthread_create(&recvt, NULL, &recvmg, (void*)new_client);
 
     // Add to hashmap and vector
     add_client(new_client);
 
-    // Create thread for receiving client's messages
-    pthread_create(&recvt, NULL, &recvmg, (void*)new_client);
     // Assign thread_id to client
     new_client->tid = recvt;
 
@@ -136,9 +153,16 @@ void* recvmg(void* client_sock) {
   char msg[BUFFER_SIZE] = {0};
   int len;
 
-  // Receive client name
+  // Receive client name and client channel
   if (recv(sock, msg, BUFFER_SIZE, 0) > 0){
-    client->nick = msg;
+    int pos = 0;
+    string temp = msg;
+    pos = temp.find("$");
+    if(pos != std::string::npos){
+      client->nick = temp.substr(0, pos).c_str();
+      client->currChanelName = temp.substr(pos, temp.length()).c_str();
+    }
+    
   }
   else {
     // Remove Client, close connection and end thread

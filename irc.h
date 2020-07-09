@@ -6,8 +6,7 @@
 
 namespace IRC{
 
-void error(std::string msg)
-{
+void error(std::string msg){
     perror(msg.c_str());
     exit(EXIT_FAILURE);
 }
