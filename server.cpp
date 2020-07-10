@@ -26,11 +26,11 @@ typedef struct client {
   string currChanelName;
 } Client;
 
-typedef struct channel{
+typedef struct channel {
   unordered_map<int, Client*> clients;
   int id;
   string name;
-  int adm; //admin's sockfd 
+  int adm;  // admin's sockfd
 } Channel;
 
 struct tinfo {
@@ -48,7 +48,7 @@ unordered_map<string, Channel*> channels = unordered_map<string, Channel*>();
 
 void add_client(Client* new_client);
 void remove_client(int sockfd);
-void sendtoall(char* msg, int curr);
+void sendtoall(char* msg, int curr, string channelName);
 void* send_client_msg(void* sockfd_msg);
 void* recvmg(void* client_sock);
 
@@ -82,16 +82,12 @@ int main(int argc, char* argv[]) {
       perror("accept");
     }
     // Create client struct in memory
-    Client* new_client = (Client*)malloc(sizeof(Client));
+    Client* new_client = new Client;
     new_client->sockfd = client_fd;
     new_client->isMuted = false;
     
-
     // Create thread for receiving client's messages
     pthread_create(&recvt, NULL, &recvmg, (void*)new_client);
-
-    // Add to hashmap and vector
-    add_client(new_client);
 
     // Assign thread_id to client
     new_client->tid = recvt;
@@ -104,10 +100,23 @@ int main(int argc, char* argv[]) {
 
 /*===== Map Operations =====*/
 
-// function that adds client to map
+// function that adds client to map of its channel
 void add_client(Client* new_client) {
   pthread_mutex_lock(&mutex);
-  clients[new_client->sockfd] = new_client;
+  auto channel = channels.find(new_client->currChanelName);
+  if (channel == channels.end()) {
+    //Creates new channel if it doesn't exist
+    Channel* new_channel = new Channel;
+    new_channel->clients[new_client->sockfd] = new_client;
+    
+    //First client is marked as adm
+    new_channel->adm = new_client->sockfd;
+    new_channel->name = new_client->currChanelName;
+    channels[new_client->currChanelName] = new_channel;
+  } else {
+    channel->second->clients[new_client->sockfd] = new_client;
+  }
+  clients[new_client->sockfd] = new_client; //Keeps track of all clients online
   pthread_mutex_unlock(&mutex);
 }
 
@@ -117,6 +126,11 @@ void remove_client(int sockfd) {
   // Find client to be removed, swap with the end, remove from the end.
   auto c = clients.find(sockfd);
   if (c != clients.end()) {
+    channels[c->second->currChanelName]->clients.erase(c);
+    //removes the channel if empty
+    if(channels[c->second->currChanelName]->clients.size()==0){
+      channels.erase(c->second->currChanelName);
+    }
     clients.erase(c);
     close(sockfd);
   }
@@ -126,16 +140,17 @@ void remove_client(int sockfd) {
 /*===== Server Commons =====*/
 
 // function that sends a message received by server to all clients
-void sendtoall(char* msg, int curr) {
+void sendtoall(char* msg, int curr, string channelName) {
   pthread_mutex_lock(&mutex);
 
   pthread_t send_msgt;
-
+  unordered_map<int, Client*> clientsInChannel = channels[channelName]->clients;
   // Iterate through all clients
-  for (auto it = clients.begin(); it != clients.end(); it++) {
+  for (auto it = clientsInChannel.begin(); it != clientsInChannel.end(); it++) {
     if (DEBUG_MODE) cout << it->first << endl;
     int fd = it->first;
     // Send message to client if its not the one who wrote it
+    
     struct tinfo* info = new struct tinfo;
     info->fd = fd;
     info->msg = msg;
@@ -154,26 +169,27 @@ void* recvmg(void* client_sock) {
   int len;
 
   // Receive client name and client channel
-  if (recv(sock, msg, BUFFER_SIZE, 0) > 0){
+  if (recv(sock, msg, BUFFER_SIZE, 0) > 0) {
     int pos = 0;
     string temp = msg;
     pos = temp.find("$");
-    if(pos != std::string::npos){
+    if (pos != std::string::npos) {
       client->nick = temp.substr(0, pos).c_str();
       client->currChanelName = temp.substr(pos, temp.length()).c_str();
     }
-    
-  }
-  else {
+    // Add to hashmap and vector
+    add_client(client);
+  } else {
     // Remove Client, close connection and end thread
     remove_client(sock);
     return NULL;
   }
-  
-  //Send join message to all clients
+
+  // Send join message to all clients
   char* connection_message = new char[32];
-  sprintf(connection_message, "\nServer: %s has joined\n", client->nick.c_str());
-  sendtoall(connection_message, sock);
+  sprintf(connection_message, "\nServer: %s has joined at %s\n",
+          client->nick.c_str(), client->currChanelName.c_str());
+  sendtoall(connection_message, sock, client->currChanelName);
 
   // Receive message
   while ((len = recv(sock, msg, BUFFER_SIZE, 0)) > 0) {
@@ -182,7 +198,7 @@ void* recvmg(void* client_sock) {
     string command = msg;
     if (command.find("/quit\n") == string::npos &&
         command.find("/ping\n") == string::npos) {
-      sendtoall(msg, sock);
+      sendtoall(msg, sock, client->currChanelName);
     } else if (command.find("/quit\n") != string::npos) {
       // break while
       break;
@@ -199,13 +215,13 @@ void* recvmg(void* client_sock) {
   // Send disconnect message to all
   char* disconnect_msg = new char[32];
   sprintf(disconnect_msg, "Server: %s has quit\n", client->nick.c_str());
-  sendtoall(disconnect_msg, sock);
+  sendtoall(disconnect_msg, sock, client->currChanelName);
   // Remove Client, close connection and end thread
   remove_client(sock);
   return NULL;
 }
 
-//Function that sends message to client
+// Function that sends message to client
 void* send_client_msg(void* sockfd_msg) {
   // Get params
   int fd = ((struct tinfo*)sockfd_msg)->fd;
@@ -218,8 +234,7 @@ void* send_client_msg(void* sockfd_msg) {
   if (c != clients.end()) {
     tid = c->second->tid;
   } else {
-    if(DEBUG_MODE) 
-      printf("send_client_msg: client fd not found");
+    if (DEBUG_MODE) printf("send_client_msg: client fd not found");
     pthread_mutex_unlock(&mutex);
     return NULL;
   }
