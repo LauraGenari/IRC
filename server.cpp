@@ -85,7 +85,7 @@ int main(int argc, char* argv[]) {
     Client* new_client = new Client;
     new_client->sockfd = client_fd;
     new_client->isMuted = false;
-    
+
     // Create thread for receiving client's messages
     pthread_create(&recvt, NULL, &recvmg, (void*)new_client);
 
@@ -93,7 +93,6 @@ int main(int argc, char* argv[]) {
     new_client->tid = recvt;
 
     // Send connection message to all clients on server
-    
   }
   return 0;
 }
@@ -105,18 +104,18 @@ void add_client(Client* new_client) {
   pthread_mutex_lock(&mutex);
   auto channel = channels.find(new_client->currChanelName);
   if (channel == channels.end()) {
-    //Creates new channel if it doesn't exist
+    // Creates new channel if it doesn't exist
     Channel* new_channel = new Channel;
     new_channel->clients[new_client->sockfd] = new_client;
-    
-    //First client is marked as adm
+
+    // First client is marked as adm
     new_channel->adm = new_client->sockfd;
     new_channel->name = new_client->currChanelName;
     channels[new_client->currChanelName] = new_channel;
   } else {
     channel->second->clients[new_client->sockfd] = new_client;
   }
-  clients[new_client->sockfd] = new_client; //Keeps track of all clients online
+  clients[new_client->sockfd] = new_client;  // Keeps track of all online clients
   pthread_mutex_unlock(&mutex);
 }
 
@@ -126,9 +125,9 @@ void remove_client(int sockfd) {
   // Find client to be removed, swap with the end, remove from the end.
   auto c = clients.find(sockfd);
   if (c != clients.end()) {
-    channels[c->second->currChanelName]->clients.erase(c);
-    //removes the channel if empty
-    if(channels[c->second->currChanelName]->clients.size()==0){
+    channels[c->second->currChanelName]->clients.erase(sockfd);
+    // removes the channel if empty
+    if (channels[c->second->currChanelName]->clients.size() == 0) {
       channels.erase(c->second->currChanelName);
     }
     clients.erase(c);
@@ -150,7 +149,7 @@ void sendtoall(char* msg, int curr, string channelName) {
     if (DEBUG_MODE) cout << it->first << endl;
     int fd = it->first;
     // Send message to client if its not the one who wrote it
-    
+
     struct tinfo* info = new struct tinfo;
     info->fd = fd;
     info->msg = msg;

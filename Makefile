@@ -1,6 +1,10 @@
 server: server.cpp
 	g++ server.cpp -o server -pthread
 
+serverDebug:
+	g++ server.cpp -g -o server -pthread
+	gdb ./server
+
 client: client.cpp
 	g++ client.cpp -o client -pthread
 
