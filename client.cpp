@@ -41,49 +41,60 @@ void interrupt_handler(int signo) {
 // Sets client_name and connects client to server, returns socket Id
 int connectUser(string *client_name) {
   struct sockaddr_in ServerIp;
+
   string command = "";
-  cout << "Bem vindo ao IRC!\nPara iniciar digite o comando /connect seguido "
-          "de seu usuário!"
-       << endl;
-  cin >> command >> *client_name;
-  // handles ctrl+d
-  if (cin.eof()) {
-    cout << "Obrigado por usar nosso IRC, espero que tenha se divertido!\n";
-    exit(0);
-  }
-  while (command != "/connect") {
-    cout << "Erro!\nDigite /connect seguido de seu usuário para iniciar!"
-         << endl;
-    cin >> command >> *client_name;
+  string ip = "";
+  string port = "";
+  
+  cout << "Bem vindo ao IRC!\nPara iniciar digite o comando /connect [IP] [PORT]" << endl;
+  
+  while (true) {
+    cin >> command >> ip >> port;
     // handles ctrl+d
     if (cin.eof()) {
       cout << "Obrigado por usar nosso IRC, espero que tenha se divertido!\n";
       exit(0);
     }
+    if(command != "/connect"){
+      cout << "Erro!\nDigite /connect [IP] [PORT]" << endl;
+    } else break;
   }
 
+
+  // --- Conexao com servidor --- //
   cout << "Conectando ....." << endl;
   // socket configuration
   int sock = socket(AF_INET, SOCK_STREAM, 0);
   currentSock = sock;
   // ServerIp.sin_port = htons(atoi(argv[2]));
-  ServerIp.sin_port = htons(2000);
+  ServerIp.sin_port = htons(atoi(port.c_str()));
   ServerIp.sin_family = AF_INET;
-  ServerIp.sin_addr.s_addr = inet_addr("127.0.0.1");
+  ServerIp.sin_addr.s_addr = inet_addr(ip.c_str());
 
   if ((connect(sock, (struct sockaddr *)&ServerIp, sizeof(ServerIp))) == -1) {
     IRC::error("connect");
   }
-  cout << "Utilize o comando /join seguido do nome do canal para entrar em um "
-          "canal!\n";
-  string canal;
+
+  // -- Comando nickname -- //
+  cout << "Utilize o comando /nickname seguido de seu apelido desejado\n";
+  cin >> command >> *client_name;
+  //TODO --> VALIDAR NICKNAME
+  while (command != "/nickname") {
+    cout << "Erro!\nUtilize o comando /nickname seguido de seu apelido desejado\n";
+    cin >> command >> *client_name;
+  }
+
+  // -- Comando join -- //
+  string canal = "";
+  
+  cout << "Utilize o comando /join seguido do nome do canal para entrar em um canal!\n";
   cin >> command >> canal;
   //TODO --> VALIDAR NOME DO CANAL
   while (command != "/join") {
-    cout << "Erro!\nUtilize o comando /join seguido do nome do canal para "
-            "entrar em um canal!\n";
+    cout << "Erro!\nUtilize o comando /join seguido do nome do canal para entrar em um canal!\n";
     cin >> command >> canal;
   }
+
   string nickAndChannel = (*client_name);
   nickAndChannel.append("$");
   nickAndChannel.append(canal);
@@ -92,6 +103,7 @@ int connectUser(string *client_name) {
   int len = write(sock, nickAndChannel.c_str(), nickAndChannel.length());
   if (len < 0) {
     cout << "\nWarning: Mensagem nao enviada!\n";
+    exit(0);
   }
 
   system("clear");
@@ -100,7 +112,7 @@ int connectUser(string *client_name) {
 
 int main(int argc, char *argv[]) {
   pthread_t recvt;
-
+  
   string client_name;
 
   // Signal handling
