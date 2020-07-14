@@ -131,7 +131,7 @@ int main(int argc, char *argv[]) {
   int len;
   while (fgets(msg, BUFFER_SIZE - client_name.size(), stdin) != NULL) {
     // Format and send message to server
-    if (msg[0] != '\n') send_msg = '\n' + client_name + ": " + msg;
+    if (msg[0] != '\n') send_msg = msg;
 
     len = write(sock, send_msg.c_str(), send_msg.length());
     if (len < 0) {

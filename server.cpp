@@ -115,7 +115,8 @@ void add_client(Client* new_client) {
   } else {
     channel->second->clients[new_client->sockfd] = new_client;
   }
-  clients[new_client->sockfd] = new_client;  // Keeps track of all online clients
+  clients[new_client->sockfd] =
+      new_client;  // Keeps track of all online clients
   pthread_mutex_unlock(&mutex);
 }
 
@@ -125,9 +126,11 @@ void remove_client(int sockfd) {
   // Find client to be removed, swap with the end, remove from the end.
   auto c = clients.find(sockfd);
   if (c != clients.end()) {
+    delete channels[c->second->currChanelName]->clients[sockfd];
     channels[c->second->currChanelName]->clients.erase(sockfd);
     // removes the channel if empty
     if (channels[c->second->currChanelName]->clients.size() == 0) {
+      delete channels[c->second->currChanelName];
       channels.erase(c->second->currChanelName);
     }
     clients.erase(c);
@@ -154,6 +157,7 @@ void sendtoall(char* msg, int curr, string channelName) {
     info->fd = fd;
     info->msg = msg;
     pthread_create(&send_msgt, NULL, &send_client_msg, (void*)info);
+    delete info;
   }
   pthread_mutex_unlock(&mutex);
 }
@@ -189,19 +193,21 @@ void* recvmg(void* client_sock) {
   sprintf(connection_message, "\nServer: %s has joined at %s\n",
           client->nick.c_str(), client->currChanelName.c_str());
   sendtoall(connection_message, sock, client->currChanelName);
-
+  delete connection_message;
   // Receive message
   while ((len = recv(sock, msg, BUFFER_SIZE, 0)) > 0) {
     msg[len] = '\0';
     // Handle /quit command
     string command = msg;
-    if (command.find("/quit\n") == string::npos &&
-        command.find("/ping\n") == string::npos) {
-      sendtoall(msg, sock, client->currChanelName);
-    } else if (command.find("/quit\n") != string::npos) {
+    if (command != "/quit\n" && command != "/ping\n") {
+      char* temp = new char[BUFFER_SIZE +3];
+      sprintf(temp, "%s: %s\n", client->nick.c_str(), msg);
+      sendtoall(temp, sock, client->currChanelName);
+      delete temp;
+    } else if (command == "/quit\n") {
       // break while
       break;
-    } else if (command.find("/ping\n") != string::npos) {
+    } else if (command == "/ping\n") {
       // Handle ping message
       struct tinfo* pongMsg = new struct tinfo;
       pongMsg->fd = sock;
@@ -209,6 +215,7 @@ void* recvmg(void* client_sock) {
       pongMsg->msg = pong;
       // Sends message only to client who sent ping
       send_client_msg((void*)pongMsg);
+      delete pongMsg;
     }
   }
   // Send disconnect message to all
@@ -216,6 +223,7 @@ void* recvmg(void* client_sock) {
   sprintf(disconnect_msg, "Server: %s has quit\n", client->nick.c_str());
   sendtoall(disconnect_msg, sock, client->currChanelName);
   // Remove Client, close connection and end thread
+  delete disconnect_msg;
   remove_client(sock);
   return NULL;
 }
@@ -224,7 +232,7 @@ void* recvmg(void* client_sock) {
 void* send_client_msg(void* sockfd_msg) {
   // Get params
   int fd = ((struct tinfo*)sockfd_msg)->fd;
-  char* msg = ((struct tinfo*)sockfd_msg)->msg;
+  string msg = ((struct tinfo*)sockfd_msg)->msg;
   pthread_t tid;
 
   // Get client's thread id
@@ -242,7 +250,7 @@ void* send_client_msg(void* sockfd_msg) {
   int num_fails = 0;
 
   // Send message and wait for confirmation
-  while (num_fails < 5 && send(fd, msg, strlen(msg), 0) < 0) {
+  while (num_fails < 5 && send(fd, msg.c_str(), msg.size(), 0) < 0) {
     num_fails++;
     // ? apagar
     if (DEBUG_MODE) cout << "send_client_msg: failed" << num_fails << endl;
