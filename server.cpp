@@ -191,6 +191,14 @@ void muteOrUnmute(Client* client, bool mute, string destinationName) {
   if (client->sockfd == channels[client->currChanelName]->adm) {
     Client* dest = searchClientByName(client->currChanelName, destinationName);
     dest->isMuted = mute;
+  }else{
+    char message[BUFFER_SIZE];
+    sprintf(message, "Server: Você não é administrador deste canal!\n");
+    struct tinfo* errMsg = new struct tinfo;
+    errMsg->msg = message;
+    errMsg->fd = client->sockfd;
+    send_client_msg(errMsg);
+    delete errMsg;
   }
 }
 
@@ -213,6 +221,14 @@ void whoIs(Client* client, string destinationName) {
     }
     send_client_msg(ipMsg);
     delete ipMsg;
+  }else{
+    char message[BUFFER_SIZE];
+    sprintf(message, "Server: Você não é administrador deste canal!\n");
+    struct tinfo* errMsg = new struct tinfo;
+    errMsg->msg = message;
+    errMsg->fd = client->sockfd;
+    send_client_msg(errMsg);
+    delete errMsg;
   }
 }
 
