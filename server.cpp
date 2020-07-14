@@ -157,9 +157,49 @@ void sendtoall(char* msg, int curr, string channelName) {
     info->fd = fd;
     info->msg = msg;
     pthread_create(&send_msgt, NULL, &send_client_msg, (void*)info);
-    delete info;
+    // delete info;
   }
   pthread_mutex_unlock(&mutex);
+}
+
+/*===== Command Funcs ====*/
+
+void sendPong(int sock) {
+  // Handle ping message
+  struct tinfo* pongMsg = new struct tinfo;
+  pongMsg->fd = sock;
+  char pong[] = "Server: pong\n";
+  pongMsg->msg = pong;
+  // Sends message only to client who sent ping
+  send_client_msg((void*)pongMsg);
+  delete pongMsg;
+}
+
+void whoIs(Client* client, string destinationName) {
+  if (client->sockfd == channels[client->currChanelName]->adm) {
+    // searches for destinationName in channel
+    pthread_mutex_lock(&mutex);
+    unordered_map<int, Client*> clientsInChannel =
+        channels[client->currChanelName]->clients;
+    auto it = clientsInChannel.begin();
+    while (it != clientsInChannel.end() && it->second->nick != destinationName)
+      it++;
+    pthread_mutex_unlock(&mutex);
+    char message[BUFFER_SIZE];
+    struct tinfo* ipMsg = new struct tinfo;
+    ipMsg->fd = client->sockfd;
+    if (it != clientsInChannel.end()) {
+      char* ip = new char[16];
+      IRC::GetIPAddress(it->first, ip);
+      sprintf(message, "Server: %s ip is %s\n", destinationName.c_str(), ip);
+      ipMsg->msg = message;
+    } else {
+      sprintf(message, "Server: Nome não encontrado no canal!\n");
+      ipMsg->msg = message;
+    }
+    send_client_msg(ipMsg);
+    delete ipMsg;
+  }
 }
 
 /*===== Thread Funcs =====*/
@@ -182,6 +222,7 @@ void* recvmg(void* client_sock) {
     }
     // Add to hashmap and vector
     add_client(client);
+
   } else {
     // Remove Client, close connection and end thread
     remove_client(sock);
@@ -189,33 +230,49 @@ void* recvmg(void* client_sock) {
   }
 
   // Send join message to all clients
-  char* connection_message = new char[32];
+  char* connection_message = new char[BUFFER_SIZE];
   sprintf(connection_message, "\nServer: %s has joined at %s\n",
           client->nick.c_str(), client->currChanelName.c_str());
   sendtoall(connection_message, sock, client->currChanelName);
   delete connection_message;
   // Receive message
+  int isRunning = 1;
   while ((len = recv(sock, msg, BUFFER_SIZE, 0)) > 0) {
+    if (!isRunning) break;
     msg[len] = '\0';
-    // Handle /quit command
     string command = msg;
-    if (command != "/quit\n" && command != "/ping\n") {
-      char* temp = new char[BUFFER_SIZE +3];
-      sprintf(temp, "%s: %s\n", client->nick.c_str(), msg);
-      sendtoall(temp, sock, client->currChanelName);
-      delete temp;
-    } else if (command == "/quit\n") {
-      // break while
-      break;
-    } else if (command == "/ping\n") {
-      // Handle ping message
-      struct tinfo* pongMsg = new struct tinfo;
-      pongMsg->fd = sock;
-      char pong[] = "Server: pong\n";
-      pongMsg->msg = pong;
-      // Sends message only to client who sent ping
-      send_client_msg((void*)pongMsg);
-      delete pongMsg;
+    size_t pos;
+    IRC::CommandType commandType = IRC::VerifyCommand(command, pos);
+
+    switch (commandType) {
+      case IRC::NONE:
+        if (!client->isMuted) {
+          char* temp = new char[BUFFER_SIZE + 3];
+          sprintf(temp, "%s: %s", client->nick.c_str(), msg);
+          sendtoall(temp, sock, client->currChanelName);
+          // delete temp;
+        } else {
+          struct tinfo* muteMsg = new struct tinfo;
+          muteMsg->fd = sock;
+          char pong[] = "Server: Você está mutado!\n";
+          muteMsg->msg = pong;
+          // Sends message only to client who sent ping
+          send_client_msg((void*)muteMsg);
+          delete muteMsg;
+        }
+        break;
+      case IRC::PING:
+        sendPong(sock);
+        break;
+      case IRC::QUIT:
+        isRunning = 0;
+        break;
+      case IRC::WHOIS:
+        int pos = command.find(" ");
+        string name = command.substr(pos+1, command.size());
+        name = name.substr(0, name.size()-1);
+        whoIs(client, name);
+        break;
     }
   }
   // Send disconnect message to all
@@ -223,7 +280,7 @@ void* recvmg(void* client_sock) {
   sprintf(disconnect_msg, "Server: %s has quit\n", client->nick.c_str());
   sendtoall(disconnect_msg, sock, client->currChanelName);
   // Remove Client, close connection and end thread
-  delete disconnect_msg;
+  // delete disconnect_msg;
   remove_client(sock);
   return NULL;
 }
@@ -241,7 +298,7 @@ void* send_client_msg(void* sockfd_msg) {
   if (c != clients.end()) {
     tid = c->second->tid;
   } else {
-    if (DEBUG_MODE) printf("send_client_msg: client fd not found");
+    if (DEBUG_MODE) printf("send_client_msg: client fd not found %d ", fd);
     pthread_mutex_unlock(&mutex);
     return NULL;
   }
