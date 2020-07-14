@@ -51,6 +51,8 @@ void remove_client(int sockfd);
 void sendtoall(char* msg, int curr, string channelName);
 void* send_client_msg(void* sockfd_msg);
 void* recvmg(void* client_sock);
+Client* searchClientByName(string channelName, string clientName);
+void muteOrUnmute(Client* client, bool mute, string destinationName);
 
 int main(int argc, char* argv[]) {
   struct sockaddr_in ServerIp;
@@ -164,6 +166,16 @@ void sendtoall(char* msg, int curr, string channelName) {
 
 /*===== Command Funcs ====*/
 
+Client* searchClientByName(string channelName, string clientName) {
+  pthread_mutex_lock(&mutex);
+  unordered_map<int, Client*> clientsInChannel = channels[channelName]->clients;
+  auto it = clientsInChannel.begin();
+  while (it != clientsInChannel.end() && it->second->nick != clientName) it++;
+  pthread_mutex_unlock(&mutex);
+
+  return it == clientsInChannel.end() ? NULL : it->second;
+}
+
 void sendPong(int sock) {
   // Handle ping message
   struct tinfo* pongMsg = new struct tinfo;
@@ -175,22 +187,24 @@ void sendPong(int sock) {
   delete pongMsg;
 }
 
+void muteOrUnmute(Client* client, bool mute, string destinationName) {
+  if (client->sockfd == channels[client->currChanelName]->adm) {
+    Client* dest = searchClientByName(client->currChanelName, destinationName);
+    dest->isMuted = mute;
+  }
+}
+
 void whoIs(Client* client, string destinationName) {
   if (client->sockfd == channels[client->currChanelName]->adm) {
     // searches for destinationName in channel
-    pthread_mutex_lock(&mutex);
-    unordered_map<int, Client*> clientsInChannel =
-        channels[client->currChanelName]->clients;
-    auto it = clientsInChannel.begin();
-    while (it != clientsInChannel.end() && it->second->nick != destinationName)
-      it++;
-    pthread_mutex_unlock(&mutex);
+    Client* destClient =
+        searchClientByName(client->currChanelName, destinationName);
     char message[BUFFER_SIZE];
     struct tinfo* ipMsg = new struct tinfo;
     ipMsg->fd = client->sockfd;
-    if (it != clientsInChannel.end()) {
+    if (destClient) {
       char* ip = new char[16];
-      IRC::GetIPAddress(it->first, ip);
+      IRC::GetIPAddress(destClient->sockfd, ip);
       sprintf(message, "Server: %s ip is %s\n", destinationName.c_str(), ip);
       ipMsg->msg = message;
     } else {
@@ -242,8 +256,9 @@ void* recvmg(void* client_sock) {
     msg[len] = '\0';
     string command = msg;
     size_t pos;
+    int namePos;
     IRC::CommandType commandType = IRC::VerifyCommand(command, pos);
-
+    string name;
     switch (commandType) {
       case IRC::NONE:
         if (!client->isMuted) {
@@ -268,10 +283,22 @@ void* recvmg(void* client_sock) {
         isRunning = 0;
         break;
       case IRC::WHOIS:
-        int pos = command.find(" ");
-        string name = command.substr(pos+1, command.size());
-        name = name.substr(0, name.size()-1);
+        namePos = command.find(" ");
+        name = command.substr(namePos + 1, command.size());
+        name = name.substr(0, name.size() - 1);
         whoIs(client, name);
+        break;
+      case IRC::MUTE:
+        namePos = command.find(" ");
+        name = command.substr(namePos + 1, command.size());
+        name = name.substr(0, name.size() - 1);
+        muteOrUnmute(client, true, name);
+        break;
+      case IRC::UNMUTE:
+        namePos = command.find(" ");
+        name = command.substr(namePos + 1, command.size());
+        name = name.substr(0, name.size() - 1);
+        muteOrUnmute(client, false, name);
         break;
     }
   }
