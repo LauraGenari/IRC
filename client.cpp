@@ -41,6 +41,7 @@ void interrupt_handler(int signo) {
 // Sets client_name and connects client to server, returns socket Id
 int connectUser(string *client_name) {
   struct sockaddr_in ServerIp;
+  size_t pos = 0;
 
   string command = "";
   string ip = "";
@@ -55,6 +56,10 @@ int connectUser(string *client_name) {
       cout << "Obrigado por usar nosso IRC, espero que tenha se divertido!\n";
       exit(0);
     }
+    // NOTA: cin ignora espaco antes e depois, entao o cara pode usar "    /connect ip port" ou "/connectttt ip port" se nao acrescentar o ' ' dps.
+    //std::cout << command;
+    //if(IRC::VerifyCommand(command+" ", pos) != IRC::CONNECT){
+    // acho que nesse caso nao precisa do .find() pq a gente sabe q o comando inteiro vai ta na string command.
     if(command != "/connect"){
       cout << "Erro!\nDigite /connect [IP] [PORT]" << endl;
     } else break;
@@ -128,6 +133,7 @@ int main(int argc, char *argv[]) {
   // ready to read a message from console
   char msg[BUFFER_SIZE];
   string send_msg;
+  size_t pos;
   int len;
   while (fgets(msg, BUFFER_SIZE - client_name.size(), stdin) != NULL) {
     // Format and send message to server
@@ -139,9 +145,18 @@ int main(int argc, char *argv[]) {
     }
     // Compare with commands and execute if true
     string command = msg;
-    if (command.find("/quit\n") != string::npos) {
-      flag = STOP_FLAG;
+    switch (IRC::VerifyCommand(command, pos)) // TODO: SE PA PODE TROCAR POR 2 IF's
+    {
+      case IRC::QUIT:
+        flag = STOP_FLAG;
+        break;
+      case IRC::NICKNAME:
+        // TODO: Verificar se tem nome valido 
+        break;
+      default:
+        break;
     }
+
     // Test flag
     if (flag == STOP_FLAG) {
       break;
