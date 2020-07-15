@@ -102,5 +102,38 @@ namespace IRC{
         }
         return false;
     }
+
+    bool checkNick( char * str){
+        int size = strlen(str);
+
+        if(size < 2 || size > 50){
+            return false;
+        }
+
+        for (int i = 0; i < size; i++){
+            if(str[i] == ' '|| str[i] == '#' || str[i] == '&' || str[i] == ':'){
+                return false;
+            }
+        }
+        
+        return true;
+    }
+
+    bool checkChannel(char * str){
+        int size = strlen(str);
+        if(str[0] != '#' && str[0] != '&' && size < 3){
+            return false;
+        }
+
+        for (int i = 1; i < size; i++){
+            if(str[i] == ' ' || str[i] == ':'){
+                return false;
+            }
+        }
+        
+        return true;
+    }
+
+
 }
 #endif
