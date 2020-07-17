@@ -24,7 +24,8 @@ typedef struct client {
   string nick;
   pthread_t tid;
   bool isMuted;
-  string currChanelName;
+  bool isConnected;
+  string currChannelName;
 } Client;
 
 typedef struct channel {
@@ -106,7 +107,7 @@ int main(int argc, char* argv[]) {
 // function that adds client to map of its channel
 void add_client(Client* new_client) {
   pthread_mutex_lock(&mutex);
-  auto channel = channels.find(new_client->currChanelName);
+  auto channel = channels.find(new_client->currChannelName);
   if (channel == channels.end()) {
     // Creates new channel if it doesn't exist
     Channel* new_channel = new Channel;
@@ -114,8 +115,8 @@ void add_client(Client* new_client) {
 
     // First client is marked as adm
     new_channel->adm = new_client->sockfd;
-    new_channel->name = new_client->currChanelName;
-    channels[new_client->currChanelName] = new_channel;
+    new_channel->name = new_client->currChannelName;
+    channels[new_client->currChannelName] = new_channel;
   } else {
     channel->second->clients[new_client->sockfd] = new_client;
   }
@@ -130,12 +131,12 @@ void remove_client(int sockfd) {
   // Find client to be removed, swap with the end, remove from the end.
   auto c = clients.find(sockfd);
   if (c != clients.end()) {
-    delete channels[c->second->currChanelName]->clients[sockfd];
-    channels[c->second->currChanelName]->clients.erase(sockfd);
+    delete channels[c->second->currChannelName]->clients[sockfd];
+    channels[c->second->currChannelName]->clients.erase(sockfd);
     // removes the channel if empty
-    if (channels[c->second->currChanelName]->clients.size() == 0) {
-      delete channels[c->second->currChanelName];
-      channels.erase(c->second->currChanelName);
+    if (channels[c->second->currChannelName]->clients.size() == 0) {
+      delete channels[c->second->currChannelName];
+      channels.erase(c->second->currChannelName);
     }
     clients.erase(c);
     close(sockfd);
@@ -178,15 +179,22 @@ void disconnect_client(int fd)
 // function that sends a message received by server to all clients
 void sendtoall(char* msg, int curr, string channelName) {
   pthread_mutex_lock(&mutex);
-
+  cout << "Entering sendtoall sock fd:"  << curr << "channel:" << channelName << endl;
   pthread_t send_msgt;
+  auto foundChannel = channels.find(channelName);
+  if(foundChannel == channels.end())
+  {
+    cout << "Channel name {"<< channelName <<"} doesnt exist\n";
+    pthread_mutex_unlock(&mutex);
+    return;
+  }
   unordered_map<int, Client*> clientsInChannel = channels[channelName]->clients;
   // Iterate through all clients
   for (auto it = clientsInChannel.begin(); it != clientsInChannel.end(); it++) {
     if (DEBUG_MODE) cout << it->first << endl;
     int fd = it->first;
-    // Send message to client if its not the one who wrote it
 
+    // Send message to client
     struct tinfo* info = new struct tinfo;
     info->fd = fd;
     info->msg = msg;
@@ -220,8 +228,8 @@ void sendPong(int sock) {
 }
 
 void muteOrUnmute(Client* client, bool mute, string destinationName) {
-  if (client->sockfd == channels[client->currChanelName]->adm) {
-    Client* dest = searchClientByName(client->currChanelName, destinationName);
+  if (client->sockfd == channels[client->currChannelName]->adm) {
+    Client* dest = searchClientByName(client->currChannelName, destinationName);
     if(dest)
       dest->isMuted = mute;
     else{
@@ -245,10 +253,10 @@ void muteOrUnmute(Client* client, bool mute, string destinationName) {
 }
 
 void whoIs(Client* client, string destinationName) {
-  if (client->sockfd == channels[client->currChanelName]->adm) {
+  if (client->sockfd == channels[client->currChannelName]->adm) {
     // searches for destinationName in channel
     Client* destClient =
-        searchClientByName(client->currChanelName, destinationName);
+        searchClientByName(client->currChannelName, destinationName);
     char message[BUFFER_SIZE];
     struct tinfo* ipMsg = new struct tinfo;
     ipMsg->fd = client->sockfd;
@@ -279,24 +287,31 @@ void kickClient(Client* client, string destinationName)
   char message[BUFFER_SIZE];
 
   //Check if client is Admin of channel
-  if(client->sockfd == channels[client->currChanelName]->adm)
+  if(client->sockfd == channels[client->currChannelName]->adm)
   {
-    // Check if user is not trying to remove himself
-    if (client->nick.compare(destinationName))
+    // Check if client is trying to remove himself
+    if (!client->nick.compare(destinationName))
     {
       sprintf(message, "Server: cannot kick yourself");
     }
     else
     {
       // Check if destination name exists in channel
-      Client* destClient = searchClientByName(client->currChanelName, destinationName);
+      Client* destClient = searchClientByName(client->currChannelName, destinationName);
       if(destClient != NULL)
       {
-        // Remove client from channel
-        //pthread_mutex_lock(&mutex);
-        //destClient->isMuted = false;
-        //destClient->currChanelName = "";
-        //pthread_mutex_unlock(&mutex);
+        pthread_mutex_lock(&mutex);
+        destClient->isMuted = false;
+        auto destChannel = channels.find(destClient->currChannelName);
+        if(destChannel != channels.end())
+        { 
+          // Remove client from channel
+          destChannel->second->clients.erase(destClient->sockfd);
+          //destClient->currChannelName = NULL_CHANNEL;
+          destClient->isConnected = false;
+        }
+
+        pthread_mutex_unlock(&mutex);
         //disconnect_client(destClient->sockfd);
 
         sprintf(message, MSG_KICK_SUCCESS);
@@ -336,7 +351,8 @@ void* recvmg(void* client_sock) {
     pos = temp.find("#");
     if (pos != std::string::npos) {
       client->nick = temp.substr(0, pos).c_str();
-      client->currChanelName = temp.substr(pos, temp.length()).c_str();
+      client->currChannelName = temp.substr(pos, temp.length()).c_str();
+      client->isConnected = true;
     }
     // Add to hashmap and vector
     add_client(client);
@@ -351,12 +367,15 @@ void* recvmg(void* client_sock) {
   char* connection_message = new char[BUFFER_SIZE];
   //sprintf(connection_message, "\nServer: %s has joined at %s\n",
   //        client->nick.c_str(), client->currChanelName.c_str());
-  sprintf(connection_message, MSG_JOIN( client->nick.c_str(), client->currChanelName.c_str()));
-  sendtoall(connection_message, sock, client->currChanelName);
+  sprintf(connection_message, MSG_JOIN( client->nick.c_str(), client->currChannelName.c_str()));
+  sendtoall(connection_message, sock, client->currChannelName);
   //delete connection_message;
+  
   // Receive message
   int isRunning = 1;
-  while ((len = recv(sock, msg, BUFFER_SIZE, 0)) > 0) {
+  while ((len = recv(sock, msg, BUFFER_SIZE, 0)) > 0) 
+  {
+    if(!client->isConnected) isRunning = 0;
     if (!isRunning) break;
     msg[len] = '\0';
     string command = msg;
@@ -369,7 +388,7 @@ void* recvmg(void* client_sock) {
         if (!client->isMuted) {
           char* temp = new char[BUFFER_SIZE + 3]; //OBS: Nao sei se e' uma boa deixar esse +3 pro tamanho do buffer
           sprintf(temp, "%s: %s", client->nick.c_str(), msg);
-          sendtoall(temp, sock, client->currChanelName);
+          sendtoall(temp, sock, client->currChannelName);
           // delete temp;
         } else {
           struct tinfo* muteMsg = new struct tinfo;
@@ -377,7 +396,7 @@ void* recvmg(void* client_sock) {
           char pong[] = "Server: Você está mutado!\n";
           muteMsg->msg = pong;
           // Sends message only to client who sent ping
-          send_client_msg((void*)muteMsg);
+          send_client_msg((void*)muteMsg); //TODO: trocar pra chamada de thread, send_client_msg eh pra ser executada em thread
           delete muteMsg;
         }
         break;
@@ -416,7 +435,7 @@ void* recvmg(void* client_sock) {
   // Send disconnect message to all
   char* disconnect_msg = new char[32];
   sprintf(disconnect_msg, "Server: %s has quit\n", client->nick.c_str());
-  sendtoall(disconnect_msg, sock, client->currChanelName);
+  sendtoall(disconnect_msg, sock, client->currChannelName);
   // Remove Client, close connection and end thread
   // delete disconnect_msg;
   remove_client(sock);

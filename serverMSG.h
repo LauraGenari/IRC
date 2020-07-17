@@ -6,4 +6,6 @@
 #define MSG_USER_NOT_FOUND "Server: Usuário não encontrado!\n"
 #define MSG_KICK_SUCCESS "Server: client has been kicked\n"
 
+#define NULL_CHANNEL ""
+
 #endif
