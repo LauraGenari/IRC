@@ -190,7 +190,17 @@ void sendPong(int sock) {
 void muteOrUnmute(Client* client, bool mute, string destinationName) {
   if (client->sockfd == channels[client->currChanelName]->adm) {
     Client* dest = searchClientByName(client->currChanelName, destinationName);
-    dest->isMuted = mute;
+    if(dest)
+      dest->isMuted = mute;
+    else{
+      char message[BUFFER_SIZE];
+      sprintf(message, "Server: Usuário não encontrado!\n");
+      struct tinfo* errMsg = new struct tinfo;
+      errMsg->msg = message;
+      errMsg->fd = client->sockfd;
+      send_client_msg(errMsg);
+      delete errMsg;
+    }
   }else{
     char message[BUFFER_SIZE];
     sprintf(message, "Server: Você não é administrador deste canal!\n");

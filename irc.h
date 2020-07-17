@@ -103,7 +103,7 @@ namespace IRC{
         return false;
     }
 
-    bool checkNick( char * str){
+    bool checkNick(const char* str){
         int size = strlen(str);
 
         if(size < 2 || size > 50){
@@ -119,7 +119,7 @@ namespace IRC{
         return true;
     }
 
-    bool checkChannel(char * str){
+    bool checkChannel(const char* str){
         int size = strlen(str);
         if(str[0] != '#' && str[0] != '&' && size < 3){
             return false;
