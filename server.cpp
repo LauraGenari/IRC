@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "irc.h"
+#include "serverMSG.h"
 
 using namespace std;
 
@@ -53,6 +54,7 @@ void* send_client_msg(void* sockfd_msg);
 void* recvmg(void* client_sock);
 Client* searchClientByName(string channelName, string clientName);
 void muteOrUnmute(Client* client, bool mute, string destinationName);
+void kickClient(Client* client, string destinationName);
 
 int main(int argc, char* argv[]) {
   struct sockaddr_in ServerIp;
@@ -141,6 +143,36 @@ void remove_client(int sockfd) {
   pthread_mutex_unlock(&mutex);
 }
 
+void disconnect_client(int fd)
+{
+  pthread_t tid;
+
+  // Get client's thread id
+  pthread_mutex_lock(&mutex);
+  auto c = clients.find(fd);
+  if (c != clients.end())
+  {
+    tid = c->second->tid;
+  }
+  else
+  {
+    if (DEBUG_MODE) printf("disconnect_client: client fd not found %d ", fd);
+    pthread_mutex_unlock(&mutex);
+    return;
+  }
+  pthread_mutex_unlock(&mutex);
+
+  // End client's receive message thread and remove from data structure
+  if (!pthread_cancel(tid)) 
+  {
+    remove_client(fd);
+  }
+  else 
+  {
+    IRC::error("disconnect_client:");
+  }
+}
+
 /*===== Server Commons =====*/
 
 // function that sends a message received by server to all clients
@@ -194,7 +226,7 @@ void muteOrUnmute(Client* client, bool mute, string destinationName) {
       dest->isMuted = mute;
     else{
       char message[BUFFER_SIZE];
-      sprintf(message, "Server: Usuário não encontrado!\n");
+      sprintf(message, MSG_USER_NOT_FOUND);
       struct tinfo* errMsg = new struct tinfo;
       errMsg->msg = message;
       errMsg->fd = client->sockfd;
@@ -203,7 +235,7 @@ void muteOrUnmute(Client* client, bool mute, string destinationName) {
     }
   }else{
     char message[BUFFER_SIZE];
-    sprintf(message, "Server: Você não é administrador deste canal!\n");
+    sprintf(message, MSG_NOT_ADM);
     struct tinfo* errMsg = new struct tinfo;
     errMsg->msg = message;
     errMsg->fd = client->sockfd;
@@ -226,20 +258,66 @@ void whoIs(Client* client, string destinationName) {
       sprintf(message, "Server: %s ip is %s\n", destinationName.c_str(), ip);
       ipMsg->msg = message;
     } else {
-      sprintf(message, "Server: Nome não encontrado no canal!\n");
+      sprintf(message, MSG_USER_NOT_FOUND);
       ipMsg->msg = message;
     }
     send_client_msg(ipMsg);
     delete ipMsg;
   }else{
     char message[BUFFER_SIZE];
-    sprintf(message, "Server: Você não é administrador deste canal!\n");
+    sprintf(message, MSG_NOT_ADM);
     struct tinfo* errMsg = new struct tinfo;
     errMsg->msg = message;
     errMsg->fd = client->sockfd;
     send_client_msg(errMsg);
     delete errMsg;
   }
+}
+
+void kickClient(Client* client, string destinationName)
+{
+  char message[BUFFER_SIZE];
+
+  //Check if client is Admin of channel
+  if(client->sockfd == channels[client->currChanelName]->adm)
+  {
+    // Check if user is not trying to remove himself
+    if (client->nick.compare(destinationName))
+    {
+      sprintf(message, "Server: cannot kick yourself");
+    }
+    else
+    {
+      // Check if destination name exists in channel
+      Client* destClient = searchClientByName(client->currChanelName, destinationName);
+      if(destClient != NULL)
+      {
+        // Remove client from channel
+        //pthread_mutex_lock(&mutex);
+        //destClient->isMuted = false;
+        //destClient->currChanelName = "";
+        //pthread_mutex_unlock(&mutex);
+        //disconnect_client(destClient->sockfd);
+
+        sprintf(message, MSG_KICK_SUCCESS);
+      }
+      else
+      {
+        // Send client not found message
+        sprintf(message, MSG_USER_NOT_FOUND);
+      }
+    }
+  }
+  else
+  {
+    sprintf(message, MSG_NOT_ADM);
+  }
+  struct tinfo* reportMsg = new struct tinfo;
+  reportMsg->msg = message;
+  reportMsg->fd = client->sockfd;
+  pthread_t sendt;
+
+  pthread_create(&sendt, NULL, &send_client_msg, (void*)reportMsg);
 }
 
 /*===== Thread Funcs =====*/
@@ -271,8 +349,9 @@ void* recvmg(void* client_sock) {
 
   // Send join message to all clients
   char* connection_message = new char[BUFFER_SIZE];
-  sprintf(connection_message, "\nServer: %s has joined at %s\n",
-          client->nick.c_str(), client->currChanelName.c_str());
+  //sprintf(connection_message, "\nServer: %s has joined at %s\n",
+  //        client->nick.c_str(), client->currChanelName.c_str());
+  sprintf(connection_message, MSG_JOIN( client->nick.c_str(), client->currChanelName.c_str()));
   sendtoall(connection_message, sock, client->currChanelName);
   //delete connection_message;
   // Receive message
@@ -288,7 +367,7 @@ void* recvmg(void* client_sock) {
     switch (commandType) {
       case IRC::NONE:
         if (!client->isMuted) {
-          char* temp = new char[BUFFER_SIZE + 3];
+          char* temp = new char[BUFFER_SIZE + 3]; //OBS: Nao sei se e' uma boa deixar esse +3 pro tamanho do buffer
           sprintf(temp, "%s: %s", client->nick.c_str(), msg);
           sendtoall(temp, sock, client->currChanelName);
           // delete temp;
@@ -326,6 +405,12 @@ void* recvmg(void* client_sock) {
         name = name.substr(0, name.size() - 1);
         muteOrUnmute(client, false, name);
         break;
+      case IRC::KICK:
+        namePos = command.find(" ");
+        name = command.substr(namePos + 1, command.size());
+        name = name.substr(0, name.size()-1); //OBS: isso e' pra remover o \n? se for da pra usar replace no lugar eu acho
+        kickClient(client, name);
+        break;
     }
   }
   // Send disconnect message to all
@@ -338,41 +423,30 @@ void* recvmg(void* client_sock) {
   return NULL;
 }
 
-// Function that sends message to client
+/**
+ * Function that sends message to client
+ * Warning: Must be called via Thread
+ * */ 
+
 void* send_client_msg(void* sockfd_msg) {
   // Get params
   int fd = ((struct tinfo*)sockfd_msg)->fd;
   string msg = ((struct tinfo*)sockfd_msg)->msg;
-  pthread_t tid;
-
-  // Get client's thread id
-  pthread_mutex_lock(&mutex);
-  auto c = clients.find(fd);
-  if (c != clients.end()) {
-    tid = c->second->tid;
-  } else {
-    if (DEBUG_MODE) printf("send_client_msg: client fd not found %d ", fd);
-    pthread_mutex_unlock(&mutex);
-    return NULL;
-  }
-  pthread_mutex_unlock(&mutex);
 
   int num_fails = 0;
 
   // Send message and wait for confirmation
-  while (num_fails < 5 && send(fd, msg.c_str(), msg.size(), 0) < 0) {
+  while (num_fails < 5 && send(fd, msg.c_str(), msg.size(), 0) < 0) 
+  {
     num_fails++;
     // ? apagar
     if (DEBUG_MODE) cout << "send_client_msg: failed" << num_fails << endl;
   }
 
   // Disconnect client if more than 5 failed tries
-  if (num_fails >= 5) {
-    if (!pthread_cancel(tid)) {
-      remove_client(fd);
-    } else {
-      IRC::error("send_client_msg:");
-    }
+  if (num_fails >= 5) 
+  {
+    disconnect_client(fd);
   }
 
   // End thread
