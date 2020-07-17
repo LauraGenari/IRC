@@ -245,7 +245,7 @@ void* recvmg(void* client_sock) {
   if (recv(sock, msg, BUFFER_SIZE, 0) > 0) {
     int pos = 0;
     string temp = msg;
-    pos = temp.find("$");
+    pos = temp.find("#");
     if (pos != std::string::npos) {
       client->nick = temp.substr(0, pos).c_str();
       client->currChanelName = temp.substr(pos, temp.length()).c_str();
@@ -264,7 +264,7 @@ void* recvmg(void* client_sock) {
   sprintf(connection_message, "\nServer: %s has joined at %s\n",
           client->nick.c_str(), client->currChanelName.c_str());
   sendtoall(connection_message, sock, client->currChanelName);
-  delete connection_message;
+  //delete connection_message;
   // Receive message
   int isRunning = 1;
   while ((len = recv(sock, msg, BUFFER_SIZE, 0)) > 0) {

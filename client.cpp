@@ -88,7 +88,7 @@ int connectUser(string *client_name) {
   cout << "Utilize o comando /nickname seguido de seu apelido desejado\n";
   cin >> command >> *client_name;
   // TODO --> VALIDAR NICKNAME
-  while (command != "/nickname") {
+  while (command != "/nickname" && !IRC::checkNick(client_name->c_str())) {
     cout << "Erro!\nUtilize o comando /nickname seguido de seu apelido "
             "desejado\n";
     cin >> command >> *client_name;
@@ -101,14 +101,14 @@ int connectUser(string *client_name) {
           "canal!\n";
   cin >> command >> canal;
   // TODO --> VALIDAR NOME DO CANAL
-  while (command != "/join") {
+  while (command != "/join" && !IRC::checkChannel(canal.c_str())) {
     cout << "Erro!\nUtilize o comando /join seguido do nome do canal para "
             "entrar em um canal!\n";
     cin >> command >> canal;
   }
 
   string nickAndChannel = (*client_name);
-  nickAndChannel.append("$");
+  nickAndChannel.append("#");
   nickAndChannel.append(canal);
 
   // Sends name to server to register nick
