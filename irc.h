@@ -121,7 +121,7 @@ namespace IRC{
 
     bool checkChannel(const char* str){
         int size = strlen(str);
-        if(str[0] != '#' && str[0] != '&' && size < 3){
+        if( (str[0] != '#' && str[0] != '&') || (size < 3) ){
             return false;
         }
 

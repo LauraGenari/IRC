@@ -129,18 +129,32 @@ void add_client(Client* new_client) {
 }
 
 // funciton that removes client from map
-void remove_client(int sockfd) {
+void remove_client(int sockfd) 
+{
   pthread_mutex_lock(&mutex);
-  // Find client to be removed, swap with the end, remove from the end.
+  // Find client to be removed.
   auto c = clients.find(sockfd);
-  if (c != clients.end()) {
+  if (c != clients.end()) 
+  {
+    // Remove client from channel
     delete channels[c->second->currChannelName]->clients[sockfd];
     channels[c->second->currChannelName]->clients.erase(sockfd);
-    // removes the channel if empty
-    if (channels[c->second->currChannelName]->clients.size() == 0) {
+
+
+    // Removes the channel if empty
+    if (channels[c->second->currChannelName]->clients.size() == 0) 
+    {
       delete channels[c->second->currChannelName];
       channels.erase(c->second->currChannelName);
     }
+    // Change admin if necessary
+    else if(channels[c->second->currChannelName]->adm == sockfd)
+    {
+      int new_adm = channels[c->second->currChannelName]->clients.begin()->second->sockfd;
+      channels[c->second->currChannelName]->adm = new_adm;
+    }
+
+    // Remove client from clients and close connection
     clients.erase(c);
     close(sockfd);
   }
@@ -153,8 +167,25 @@ void change_client_channel(Client* client, string channelName)
   {
     return;
   }
+  // Message to client
+  char msg[BUFFER_SIZE];
+  // Thread id
+  pthread_t tid;
+
+  // Check if it has a valid channel name
+  if( !IRC::checkChannel(channelName.c_str()) )
+  {
+    sprintf(msg, MSG_WRONG_CHANNEL_NAME);
+    struct tinfo* wrongCh = new struct tinfo;
+    wrongCh->fd = client->sockfd;
+    wrongCh->msg = msg;
+    pthread_create(&tid, NULL, &send_client_msg, (void*) wrongCh);
+    
+    return;
+  }
+
   pthread_mutex_lock(&mutex);
-  client->currChannelName = "#" + channelName;
+  client->currChannelName = channelName;
   auto channel = channels.find(client->currChannelName);
   if (channel == channels.end()) 
   {
@@ -173,6 +204,10 @@ void change_client_channel(Client* client, string channelName)
   }
   client->isConnected = true;
   pthread_mutex_unlock(&mutex);
+
+  // multicast connection message
+  sprintf(msg, MSG_JOIN(client->nick.c_str(), client->currChannelName.c_str()));
+  sendtoall(msg, client->sockfd, client->currChannelName);
 }
 
 void disconnect_client(int fd)
@@ -210,10 +245,10 @@ void disconnect_client(int fd)
 // function that sends a message received by server to all clients
 void sendtoall(char* msg, int curr, string channelName) {
   pthread_mutex_lock(&mutex);
-  cout << "Entering sendtoall sock fd:"  << curr << "channel:" << channelName << endl;
+  if(DEBUG_MODE) cout << "Entering sendtoall sock fd: "  << curr << " channel: " << channelName << endl;
   pthread_t send_msgt;
   auto foundChannel = channels.find(channelName);
-  if(foundChannel == channels.end())
+  if(foundChannel == channels.end() && DEBUG_MODE)
   {
     cout << "Channel name {"<< channelName <<"} doesnt exist\n";
     pthread_mutex_unlock(&mutex);
@@ -251,7 +286,7 @@ void sendPong(int sock) {
   // Handle ping message
   struct tinfo* pongMsg = new struct tinfo;
   pongMsg->fd = sock;
-  char pong[] = "Server: pong\n";
+  char pong[] = MSG_PONG;
   pongMsg->msg = pong;
   // Sends message only to client who sent ping
   send_client_msg((void*)pongMsg);
@@ -325,7 +360,7 @@ void kickClient(Client* client, string destinationName)
     // Check if client is trying to remove himself
     if (!client->nick.compare(destinationName))
     {
-      sprintf(message, "Server: cannot kick yourself");
+      sprintf(message, MSG_SELF_KICK);
     }
     else
     {
@@ -434,7 +469,7 @@ void* recvmg(void* client_sock) {
       case IRC::NONE:
         if(!client->isConnected)
         {
-          char joinCH[] = "Server: Use '/join canal' para se conectar a um canal primeiro!\n";
+          char joinCH[] = MSG_NOT_CONNECTED_TO_CHANNEL;
           struct tinfo* joinMsg = new struct tinfo;
           joinMsg->fd = sock;
           joinMsg->msg = joinCH;
@@ -453,7 +488,7 @@ void* recvmg(void* client_sock) {
           {
             struct tinfo* muteMsg = new struct tinfo;
             muteMsg->fd = sock;
-            char pong[] = "Server: Você está mutado!\n";
+            char pong[] = MSG_MUTE;
             muteMsg->msg = pong;
             // Sends message only to client who sent ping
             pthread_create(&send_tid, NULL, &send_client_msg, (void*) muteMsg);
@@ -508,7 +543,7 @@ void* recvmg(void* client_sock) {
   }
   // Send disconnect message to all
   char* disconnect_msg = new char[32];
-  sprintf(disconnect_msg, "Server: %s has quit\n", client->nick.c_str());
+  sprintf(disconnect_msg, MSG_QUIT(client->nick.c_str()));
   sendtoall(disconnect_msg, sock, client->currChannelName);
   // Remove Client, close connection and end thread
   // delete disconnect_msg;
@@ -541,7 +576,7 @@ void* send_client_msg(void* sockfd_msg) {
   {
     disconnect_client(fd);
   }
-
+  //delete (struct tinfo*) sockfd_msg;
   // End thread
   return NULL;
 }
