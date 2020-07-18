@@ -105,6 +105,7 @@ int main(int argc, char* argv[]) {
 void add_client(Client* new_client) {
   pthread_mutex_lock(&mutex);
   auto channel = channels.find(new_client->currChanelName);
+  
   if (channel == channels.end()) {
     // Creates new channel if it doesn't exist
     Channel* new_channel = new Channel;
@@ -253,13 +254,6 @@ void* recvmg(void* client_sock) {
 
   // Receive client name and client channel
   if (recv(sock, msg, BUFFER_SIZE, 0) > 0) {
-    int pos = 0;
-    string temp = msg;
-    pos = temp.find("#");
-    if (pos != std::string::npos) {
-      client->nick = temp.substr(0, pos).c_str();
-      client->currChanelName = temp.substr(pos, temp.length()).c_str();
-    }
     // Add to hashmap and vector
     add_client(client);
 
@@ -271,7 +265,7 @@ void* recvmg(void* client_sock) {
 
   // Send join message to all clients
   char* connection_message = new char[BUFFER_SIZE];
-  sprintf(connection_message, "\nServer: %s has joined at %s\n",
+  sprintf(connection_message, "\nServer: %s joined at %s\n",
           client->nick.c_str(), client->currChanelName.c_str());
   sendtoall(connection_message, sock, client->currChanelName);
   //delete connection_message;

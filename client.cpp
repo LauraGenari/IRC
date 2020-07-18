@@ -52,12 +52,12 @@ int connectUser(string *client_name) {
       << endl;
 
   while (true) {
-    cin >> command >> ip >> port;
     // handles ctrl+d
     if (cin.eof()) {
       cout << "Obrigado por usar nosso IRC, espero que tenha se divertido!\n";
       exit(0);
     }
+    cin >> command >> ip >> port;
     // NOTA: cin ignora espaco antes e depois, entao o cara pode usar " /connect
     // ip port" ou "/connectttt ip port" se nao acrescentar o ' ' dps.
     // std::cout << command;
@@ -87,8 +87,7 @@ int connectUser(string *client_name) {
   // -- Comando nickname -- //
   cout << "Utilize o comando /nickname seguido de seu apelido desejado\n";
   cin >> command >> *client_name;
-  // TODO --> VALIDAR NICKNAME
-  while (command != "/nickname" && !IRC::checkNick(client_name->c_str())) {
+  while (command != "/nickname" || !IRC::checkNick(client_name->c_str())) {
     cout << "Erro!\nUtilize o comando /nickname seguido de seu apelido "
             "desejado\n";
     cin >> command >> *client_name;
@@ -100,15 +99,13 @@ int connectUser(string *client_name) {
   cout << "Utilize o comando /join seguido do nome do canal para entrar em um "
           "canal!\n";
   cin >> command >> canal;
-  // TODO --> VALIDAR NOME DO CANAL
-  while (command != "/join" && !IRC::checkChannel(canal.c_str())) {
+  while (command != "/join" || !IRC::checkChannel(canal.c_str())) {
     cout << "Erro!\nUtilize o comando /join seguido do nome do canal para "
             "entrar em um canal!\n";
     cin >> command >> canal;
   }
 
   string nickAndChannel = (*client_name);
-  nickAndChannel.append("#");
   nickAndChannel.append(canal);
 
   // Sends name to server to register nick

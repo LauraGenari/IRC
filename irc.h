@@ -105,6 +105,7 @@ namespace IRC{
 
     bool checkNick(const char* str){
         int size = strlen(str);
+        printf("%s %d\n", str, size);
 
         if(size < 2 || size > 50){
             return false;
@@ -121,7 +122,8 @@ namespace IRC{
 
     bool checkChannel(const char* str){
         int size = strlen(str);
-        if(str[0] != '#' && str[0] != '&' && size < 3){
+        printf("%s %d\n", str, size);
+        if((str[0] != '#' && str[0] != '&') || (size < 3|| size > 200)){
             return false;
         }
 
