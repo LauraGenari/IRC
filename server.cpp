@@ -50,6 +50,7 @@ unordered_map<string, Channel*> channels = unordered_map<string, Channel*>();
 
 void add_client(Client* new_client);
 void remove_client(int sockfd);
+void change_client_channel(Client* client, string channelName);
 void sendtoall(char* msg, int curr, string channelName);
 void* send_client_msg(void* sockfd_msg);
 void* recvmg(void* client_sock);
@@ -108,7 +109,8 @@ int main(int argc, char* argv[]) {
 void add_client(Client* new_client) {
   pthread_mutex_lock(&mutex);
   auto channel = channels.find(new_client->currChannelName);
-  if (channel == channels.end()) {
+  if (channel == channels.end()) 
+  {
     // Creates new channel if it doesn't exist
     Channel* new_channel = new Channel;
     new_channel->clients[new_client->sockfd] = new_client;
@@ -117,11 +119,12 @@ void add_client(Client* new_client) {
     new_channel->adm = new_client->sockfd;
     new_channel->name = new_client->currChannelName;
     channels[new_client->currChannelName] = new_channel;
-  } else {
+  }
+  else 
+  {
     channel->second->clients[new_client->sockfd] = new_client;
   }
-  clients[new_client->sockfd] =
-      new_client;  // Keeps track of all online clients
+  clients[new_client->sockfd] = new_client;  // Keeps track of all online clients
   pthread_mutex_unlock(&mutex);
 }
 
@@ -141,6 +144,34 @@ void remove_client(int sockfd) {
     clients.erase(c);
     close(sockfd);
   }
+  pthread_mutex_unlock(&mutex);
+}
+
+void change_client_channel(Client* client, string channelName)
+{
+  if(client->isConnected)
+  {
+    return;
+  }
+  pthread_mutex_lock(&mutex);
+  client->currChannelName = "#" + channelName;
+  auto channel = channels.find(client->currChannelName);
+  if (channel == channels.end()) 
+  {
+    // Creates new channel if it doesn't exist
+    Channel* new_channel = new Channel;
+    new_channel->clients[client->sockfd] = client;
+
+    // First client is marked as adm
+    new_channel->adm = client->sockfd;
+    new_channel->name = client->currChannelName;
+    channels[client->currChannelName] = new_channel;
+  }
+  else 
+  {
+    channel->second->clients[client->sockfd] = client;
+  }
+  client->isConnected = true;
   pthread_mutex_unlock(&mutex);
 }
 
@@ -285,6 +316,8 @@ void whoIs(Client* client, string destinationName) {
 void kickClient(Client* client, string destinationName)
 {
   char message[BUFFER_SIZE];
+  char destMessage[BUFFER_SIZE];
+  pthread_t sendt;
 
   //Check if client is Admin of channel
   if(client->sockfd == channels[client->currChannelName]->adm)
@@ -310,9 +343,14 @@ void kickClient(Client* client, string destinationName)
           //destClient->currChannelName = NULL_CHANNEL;
           destClient->isConnected = false;
         }
-
         pthread_mutex_unlock(&mutex);
-        //disconnect_client(destClient->sockfd);
+        
+        // Send warning message to kicked client
+        sprintf(destMessage, MSG_WARN_ABOUT_KICK);
+        struct tinfo* warnMessage = new struct tinfo;
+        warnMessage->msg = destMessage;
+        warnMessage->fd = destClient->sockfd;
+        pthread_create(&sendt, NULL, &send_client_msg, (void*) warnMessage);
 
         sprintf(message, MSG_KICK_SUCCESS);
       }
@@ -330,7 +368,6 @@ void kickClient(Client* client, string destinationName)
   struct tinfo* reportMsg = new struct tinfo;
   reportMsg->msg = message;
   reportMsg->fd = client->sockfd;
-  pthread_t sendt;
 
   pthread_create(&sendt, NULL, &send_client_msg, (void*)reportMsg);
 }
@@ -371,59 +408,96 @@ void* recvmg(void* client_sock) {
   sendtoall(connection_message, sock, client->currChannelName);
   //delete connection_message;
   
-  // Receive message
+
+  // Receive Loop
   int isRunning = 1;
+  string command = msg;
+  size_t pos;
+  string name;
+  int namePos;
+
+  pthread_t send_tid;
+  
   while ((len = recv(sock, msg, BUFFER_SIZE, 0)) > 0) 
   {
-    if(!client->isConnected) isRunning = 0;
+    // Break if connection ended
     if (!isRunning) break;
     msg[len] = '\0';
-    string command = msg;
-    size_t pos;
-    int namePos;
+    command = msg;
+    
     IRC::CommandType commandType = IRC::VerifyCommand(command, pos);
-    string name;
-    switch (commandType) {
+  
+    // Check channel commands
+    
+    switch (commandType) 
+    {
       case IRC::NONE:
-        if (!client->isMuted) {
-          char* temp = new char[BUFFER_SIZE + 3]; //OBS: Nao sei se e' uma boa deixar esse +3 pro tamanho do buffer
-          sprintf(temp, "%s: %s", client->nick.c_str(), msg);
-          sendtoall(temp, sock, client->currChannelName);
-          // delete temp;
-        } else {
-          struct tinfo* muteMsg = new struct tinfo;
-          muteMsg->fd = sock;
-          char pong[] = "Server: Você está mutado!\n";
-          muteMsg->msg = pong;
-          // Sends message only to client who sent ping
-          send_client_msg((void*)muteMsg); //TODO: trocar pra chamada de thread, send_client_msg eh pra ser executada em thread
-          delete muteMsg;
+        if(!client->isConnected)
+        {
+          char joinCH[] = "Server: Use '/join canal' para se conectar a um canal primeiro!\n";
+          struct tinfo* joinMsg = new struct tinfo;
+          joinMsg->fd = sock;
+          joinMsg->msg = joinCH;
+          pthread_create(&send_tid, NULL, &send_client_msg, (void*) joinMsg);
+        }
+        else 
+        {
+          if (!client->isMuted) 
+          {
+            char* temp = new char[BUFFER_SIZE + 3]; //OBS: Nao sei se e' uma boa deixar esse +3 pro tamanho do buffer
+            sprintf(temp, "%s: %s", client->nick.c_str(), msg);
+            sendtoall(temp, sock, client->currChannelName);
+            // delete temp;
+          }
+          else
+          {
+            struct tinfo* muteMsg = new struct tinfo;
+            muteMsg->fd = sock;
+            char pong[] = "Server: Você está mutado!\n";
+            muteMsg->msg = pong;
+            // Sends message only to client who sent ping
+            pthread_create(&send_tid, NULL, &send_client_msg, (void*) muteMsg);
+            //delete muteMsg;
+          }
         }
         break;
-      case IRC::PING:
-        sendPong(sock);
-        break;
+      
       case IRC::QUIT:
         isRunning = 0;
         break;
+
+      case IRC::PING:
+        sendPong(sock);
+        break;
+
+      case IRC::JOIN:
+        namePos = command.find(" ");
+        name = command.substr(namePos + 1, command.size());
+        name = name.substr(0, name.size() - 1);
+        change_client_channel(client, name);
+        break;
+
       case IRC::WHOIS:
         namePos = command.find(" ");
         name = command.substr(namePos + 1, command.size());
         name = name.substr(0, name.size() - 1);
         whoIs(client, name);
         break;
+
       case IRC::MUTE:
         namePos = command.find(" ");
         name = command.substr(namePos + 1, command.size());
         name = name.substr(0, name.size() - 1);
         muteOrUnmute(client, true, name);
         break;
+
       case IRC::UNMUTE:
         namePos = command.find(" ");
         name = command.substr(namePos + 1, command.size());
         name = name.substr(0, name.size() - 1);
         muteOrUnmute(client, false, name);
         break;
+
       case IRC::KICK:
         namePos = command.find(" ");
         name = command.substr(namePos + 1, command.size());
