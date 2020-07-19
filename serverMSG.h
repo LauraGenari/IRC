@@ -13,6 +13,8 @@
 #define MSG_NOT_CONNECTED_TO_CHANNEL "Server: Use '/join canal' para se conectar a um canal primeiro!\n"
 #define MSG_WRONG_CHANNEL_NAME "Server: Por favor, use um nome de canal válido!\n Server: Canais começam com # ou & e têm de 3 a 50 caracteres\n"
 #define MSG_WRONG_NICKNAME "Server: Por favor, insira um nickname válido!\n"
+#define MSG_MUTE_SUCCESS "Server: Usuário foi mutado com sucesso!\n"
+#define MSG_UNMUTE_SUCCESS "Server: Usuário foi desmutado com sucesso!\n"
 
 #define NULL_CHANNEL ""
 

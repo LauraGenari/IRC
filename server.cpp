@@ -284,68 +284,77 @@ Client* searchClientByName(string channelName, string clientName) {
 
 void sendPong(int sock) {
   // Handle ping message
+  pthread_t tid;
+  char pong[] = MSG_PONG;
   struct tinfo* pongMsg = new struct tinfo;
   pongMsg->fd = sock;
-  char pong[] = MSG_PONG;
   pongMsg->msg = pong;
+  
   // Sends message only to client who sent ping
-  send_client_msg((void*)pongMsg);
-  delete pongMsg;
+  pthread_create(&tid, NULL, &send_client_msg, pongMsg);
 }
 
-void muteOrUnmute(Client* client, bool mute, string destinationName) {
-  if (client->sockfd == channels[client->currChannelName]->adm) {
+void muteOrUnmute(Client* client, bool mute, string destinationName) 
+{
+  char message[BUFFER_SIZE];
+  pthread_t tid;
+  // Verifica se client eh admin
+  if (client->sockfd == channels[client->currChannelName]->adm) 
+  {
+    // Verifica se nome eh valido
     Client* dest = searchClientByName(client->currChannelName, destinationName);
     if(dest)
-      dest->isMuted = mute;
-    else{
-      char message[BUFFER_SIZE];
-      sprintf(message, MSG_USER_NOT_FOUND);
-      struct tinfo* errMsg = new struct tinfo;
-      errMsg->msg = message;
-      errMsg->fd = client->sockfd;
-      send_client_msg(errMsg);
-      delete errMsg;
+    {
+      dest->isMuted = mute; // Se sim, muta/desmuta cliente
+      if(mute) sprintf(message, MSG_MUTE_SUCCESS);
+      else sprintf(message, MSG_UNMUTE_SUCCESS);
     }
-  }else{
-    char message[BUFFER_SIZE];
-    sprintf(message, MSG_NOT_ADM);
-    struct tinfo* errMsg = new struct tinfo;
-    errMsg->msg = message;
-    errMsg->fd = client->sockfd;
-    send_client_msg(errMsg);
-    delete errMsg;
+    else
+    {
+      sprintf(message, MSG_USER_NOT_FOUND);
+    }
   }
+  else
+  {
+    sprintf(message, MSG_NOT_ADM);
+  }
+  struct tinfo* errMsg = new struct tinfo;
+  errMsg->msg = message;
+  errMsg->fd = client->sockfd;
+  pthread_create(&tid, NULL, &send_client_msg, errMsg);
 }
 
-void whoIs(Client* client, string destinationName) {
-  if (client->sockfd == channels[client->currChannelName]->adm) {
+void whoIs(Client* client, string destinationName) 
+{
+  char message[BUFFER_SIZE];
+  pthread_t tid;
+  // Check if client is admin
+  if (client->sockfd == channels[client->currChannelName]->adm) 
+  {
     // searches for destinationName in channel
-    Client* destClient =
-        searchClientByName(client->currChannelName, destinationName);
-    char message[BUFFER_SIZE];
-    struct tinfo* ipMsg = new struct tinfo;
-    ipMsg->fd = client->sockfd;
-    if (destClient) {
+    Client* destClient = searchClientByName(client->currChannelName, destinationName);
+    if (destClient) 
+    {
       char* ip = new char[16];
       IRC::GetIPAddress(destClient->sockfd, ip);
       sprintf(message, "Server: %s ip is %s\n", destinationName.c_str(), ip);
-      ipMsg->msg = message;
-    } else {
-      sprintf(message, MSG_USER_NOT_FOUND);
-      ipMsg->msg = message;
+      delete[] ip;
     }
-    send_client_msg(ipMsg);
-    delete ipMsg;
-  }else{
-    char message[BUFFER_SIZE];
-    sprintf(message, MSG_NOT_ADM);
-    struct tinfo* errMsg = new struct tinfo;
-    errMsg->msg = message;
-    errMsg->fd = client->sockfd;
-    send_client_msg(errMsg);
-    delete errMsg;
+    else
+    {
+      sprintf(message, MSG_USER_NOT_FOUND);
+    }
   }
+  else
+  {
+    sprintf(message, MSG_NOT_ADM);
+  }
+
+  // Send message to client
+  struct tinfo* errMsg = new struct tinfo;
+  errMsg->fd = client->sockfd;
+  errMsg->msg = message;
+  pthread_create(&tid, NULL, &send_client_msg, errMsg);
 }
 
 void kickClient(Client* client, string destinationName)
@@ -576,7 +585,6 @@ void* send_client_msg(void* sockfd_msg) {
     disconnect_client(fd);
   }
 
-  //delete[] ((struct tinfo*) sockfd_msg)->msg;
   delete (struct tinfo*) sockfd_msg;
   // End thread
   return NULL;
