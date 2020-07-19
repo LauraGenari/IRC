@@ -2,7 +2,7 @@
 #define _IRC_H_
 
 #define BUFFER_SIZE 4096
-#define DEBUG_MODE true
+#define DEBUG_MODE false
 
 namespace IRC{
 
@@ -105,7 +105,6 @@ namespace IRC{
 
     bool checkNick(const char* str){
         int size = strlen(str);
-        printf("%s %d\n", str, size);
 
         if(size < 2 || size > 50){
             return false;
@@ -122,7 +121,6 @@ namespace IRC{
 
     bool checkChannel(const char* str){
         int size = strlen(str);
-        printf("%s %d\n", str, size);
         if((str[0] != '#' && str[0] != '&') || (size < 3|| size > 200)){
             return false;
         }
