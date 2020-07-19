@@ -37,7 +37,7 @@ typedef struct channel {
 
 struct tinfo {
   int fd;
-  char* msg;
+  string msg;
 };
 
 // Hashmap for finding clients via its socket file descriptor
@@ -142,7 +142,7 @@ void remove_client(int sockfd)
 
 
     // Removes the channel if empty
-    if (channels[c->second->currChannelName]->clients.size() == 0) 
+    if (channels[c->second->currChannelName]->clients.size() <= 0) 
     {
       delete channels[c->second->currChannelName];
       channels.erase(c->second->currChannelName);
@@ -417,11 +417,13 @@ void* recvmg(void* client_sock) {
   int len;
 
   // Receive client name and client channel
-  if (recv(sock, msg, BUFFER_SIZE, 0) > 0) {
+  if (recv(sock, msg, BUFFER_SIZE, 0) > 0) 
+  {
     int pos = 0;
     string temp = msg;
     pos = temp.find("#");
-    if (pos != std::string::npos) {
+    if (pos != std::string::npos) 
+    {
       client->nick = temp.substr(0, pos).c_str();
       client->currChannelName = temp.substr(pos, temp.length()).c_str();
       client->isConnected = true;
@@ -437,12 +439,9 @@ void* recvmg(void* client_sock) {
 
   // Send join message to all clients
   char* connection_message = new char[BUFFER_SIZE];
-  //sprintf(connection_message, "\nServer: %s has joined at %s\n",
-  //        client->nick.c_str(), client->currChanelName.c_str());
   sprintf(connection_message, MSG_JOIN( client->nick.c_str(), client->currChannelName.c_str()));
   sendtoall(connection_message, sock, client->currChannelName);
-  //delete connection_message;
-  
+  delete[] connection_message;
 
   // Receive Loop
   int isRunning = 1;
@@ -542,11 +541,11 @@ void* recvmg(void* client_sock) {
     }
   }
   // Send disconnect message to all
-  char* disconnect_msg = new char[32];
+  char* disconnect_msg = new char[BUFFER_SIZE];
   sprintf(disconnect_msg, MSG_QUIT(client->nick.c_str()));
   sendtoall(disconnect_msg, sock, client->currChannelName);
   // Remove Client, close connection and end thread
-  // delete disconnect_msg;
+  delete[] disconnect_msg;
   remove_client(sock);
   return NULL;
 }
@@ -576,7 +575,9 @@ void* send_client_msg(void* sockfd_msg) {
   {
     disconnect_client(fd);
   }
-  //delete (struct tinfo*) sockfd_msg;
+
+  //delete[] ((struct tinfo*) sockfd_msg)->msg;
+  delete (struct tinfo*) sockfd_msg;
   // End thread
   return NULL;
 }
