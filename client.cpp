@@ -105,7 +105,7 @@ int connectUser(string *client_name) {
     cin >> command >> canal;
   }
 
-  string nickAndChannel = (*client_name);
+  string nickAndChannel = (*client_name) + ",";
   nickAndChannel.append(canal);
 
   // Sends name to server to register nick
@@ -136,34 +136,53 @@ int main(int argc, char *argv[]) {
 
   // ready to read a message from console
   char msg[BUFFER_SIZE];
-  size_t pos;
-  int len;
-  while (fgets(msg, BUFFER_SIZE, stdin) != NULL) {
-    // Format and send message to server
-    if (msg[0] != '\n') {
-      len = write(sock, msg, BUFFER_SIZE);
-      if (len < 0) {
-        cout << "\nWarning: Message not sent!\n";
-      }
+  size_t pos = 0;
+  int len = 0;
+  string new_nick = "";
+  while (fgets(msg, BUFFER_SIZE - 53, stdin) != NULL) 
+  {
+    if (msg[0] == '\n') 
+    {
+      continue;
     }
+
+    // Send message to server
     string command = msg;
+    
+    len = write(sock, msg, command.size());
+    if (len < 0) 
+    {
+      cout << "\nWarning: Message not sent!\n";
+    }
+
     // Compare with commands and execute if true
-    switch (IRC::VerifyCommand(command, pos))  // TODO: SE PA PODE TROCAR POR 2 IF's
+    switch (IRC::VerifyCommand(command, pos))
     {
       case IRC::QUIT:
         flag = STOP_FLAG;
         break;
+
       case IRC::NICKNAME:
-        // TODO: Verificar se tem nome valido
+        pos = command.find(" ");
+        new_nick = command.substr(pos + 1, string::npos);
+        new_nick = new_nick.substr(0, new_nick.size() - 1); // Cut '\n'
+        if(IRC::checkNick(new_nick.c_str()))
+        {
+          client_name = new_nick;
+          cout << client_name;
+        }
         break;
+      
       default:
         break;
     }
 
     // Test flag
-    if (flag == STOP_FLAG) {
+    if (flag == STOP_FLAG) 
+    {
       break;
     }
+
     msg[0] = '\0';
   }
 

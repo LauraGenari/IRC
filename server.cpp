@@ -57,6 +57,7 @@ void* recvmg(void* client_sock);
 Client* searchClientByName(string channelName, string clientName);
 void muteOrUnmute(Client* client, bool mute, string destinationName);
 void kickClient(Client* client, string destinationName);
+void changeNickname(Client* client, string name);
 
 int main(int argc, char* argv[]) {
   struct sockaddr_in ServerIp;
@@ -96,9 +97,9 @@ int main(int argc, char* argv[]) {
     pthread_create(&recvt, NULL, &recvmg, (void*)new_client);
 
     // Assign thread_id to client
+    pthread_mutex_lock(&mutex);
     new_client->tid = recvt;
-
-    // Send connection message to all clients on server
+    pthread_mutex_unlock(&mutex);
   }
   return 0;
 }
@@ -163,14 +164,22 @@ void remove_client(int sockfd)
 
 void change_client_channel(Client* client, string channelName)
 {
-  if(client->isConnected)
-  {
-    return;
-  }
   // Message to client
-  char msg[BUFFER_SIZE];
+  char msg[BUFFER_SIZE] = {0};
   // Thread id
   pthread_t tid;
+
+  if(client->isConnected)
+  {
+    char response[] = MSG_ALREADY_CONNECTED;
+    struct tinfo* responseMsg = new struct tinfo;
+    responseMsg->fd = client->sockfd;
+    responseMsg->msg = response;
+  
+    // Sends response to client
+    pthread_create(&tid, NULL, &send_client_msg, responseMsg);
+    return;
+  }
 
   // Check if it has a valid channel name
   if( !IRC::checkChannel(channelName.c_str()) )
@@ -243,10 +252,14 @@ void disconnect_client(int fd)
 /*===== Server Commons =====*/
 
 // function that sends a message received by server to all clients
-void sendtoall(char* msg, int curr, string channelName) {
-  pthread_mutex_lock(&mutex);
-  if(DEBUG_MODE) cout << "Entering sendtoall sock fd: "  << curr << " channel: " << channelName << endl;
+void sendtoall(char* msg, int curr, string channelName) 
+{
   pthread_t send_msgt;
+
+  pthread_mutex_lock(&mutex);
+  if(DEBUG_MODE)  cout << "Entering sendtoall sock fd: "  << curr << " channel: " << channelName << endl;
+  
+  // Search channel
   auto foundChannel = channels.find(channelName);
   if(foundChannel == channels.end() && DEBUG_MODE)
   {
@@ -257,7 +270,7 @@ void sendtoall(char* msg, int curr, string channelName) {
   unordered_map<int, Client*> clientsInChannel = channels[channelName]->clients;
   // Iterate through all clients
   for (auto it = clientsInChannel.begin(); it != clientsInChannel.end(); it++) {
-    if (DEBUG_MODE) cout << it->first << endl;
+    if (DEBUG_MODE) cout << it->first << "message: " << msg << endl;
     int fd = it->first;
 
     // Send message to client
@@ -265,14 +278,14 @@ void sendtoall(char* msg, int curr, string channelName) {
     info->fd = fd;
     info->msg = msg;
     pthread_create(&send_msgt, NULL, &send_client_msg, (void*)info);
-    // delete info;
   }
   pthread_mutex_unlock(&mutex);
 }
 
 /*===== Command Funcs ====*/
 
-Client* searchClientByName(string channelName, string clientName) {
+Client* searchClientByName(string channelName, string clientName) 
+{
   pthread_mutex_lock(&mutex);
   unordered_map<int, Client*> clientsInChannel = channels[channelName]->clients;
   auto it = clientsInChannel.begin();
@@ -282,7 +295,8 @@ Client* searchClientByName(string channelName, string clientName) {
   return it == clientsInChannel.end() ? NULL : it->second;
 }
 
-void sendPong(int sock) {
+void sendPong(int sock) 
+{
   // Handle ping message
   pthread_t tid;
   char pong[] = MSG_PONG;
@@ -296,7 +310,7 @@ void sendPong(int sock) {
 
 void muteOrUnmute(Client* client, bool mute, string destinationName) 
 {
-  char message[BUFFER_SIZE];
+  char message[BUFFER_SIZE] = {0};
   pthread_t tid;
   // Verifica se client eh admin
   if (client->sockfd == channels[client->currChannelName]->adm) 
@@ -326,7 +340,7 @@ void muteOrUnmute(Client* client, bool mute, string destinationName)
 
 void whoIs(Client* client, string destinationName) 
 {
-  char message[BUFFER_SIZE];
+  char message[BUFFER_SIZE] = {0};
   pthread_t tid;
   // Check if client is admin
   if (client->sockfd == channels[client->currChannelName]->adm) 
@@ -359,8 +373,8 @@ void whoIs(Client* client, string destinationName)
 
 void kickClient(Client* client, string destinationName)
 {
-  char message[BUFFER_SIZE];
-  char destMessage[BUFFER_SIZE];
+  char message[BUFFER_SIZE] = {0};
+  char destMessage[BUFFER_SIZE] = {0};
   pthread_t sendt;
 
   //Check if client is Admin of channel
@@ -416,31 +430,76 @@ void kickClient(Client* client, string destinationName)
   pthread_create(&sendt, NULL, &send_client_msg, (void*)reportMsg);
 }
 
+/**
+ * Treats command /nickname
+ * @param client -> client that wants to change nickname, name -> new nickname
+*/
+void changeNickname(Client* client, string name)
+{
+  pthread_t sendt;
+  char message_to_client[BUFFER_SIZE] = {0};
+  char message_to_channel[BUFFER_SIZE] = {0};
+
+  // Check if it is a valid nick
+  if(IRC::checkNick(name.c_str()))
+  {
+    sprintf(message_to_client, MSG_CHANGED_NICKNAME(name.c_str()));
+    sprintf(message_to_channel, MSG_CHANGED_NICKNAME_CHANNEl(client->nick.c_str(), name.c_str()));
+
+    pthread_mutex_lock(&mutex);
+    client->nick = name;
+    pthread_mutex_unlock(&mutex);
+
+    sendtoall(message_to_channel, client->sockfd, client->currChannelName);
+  }
+  else 
+  {
+    sprintf(message_to_client, MSG_WRONG_NICKNAME);
+  }
+
+  // Send server response
+  struct tinfo* serverMsg = new struct tinfo;
+  serverMsg->msg = message_to_client;
+  serverMsg->fd = client->sockfd;
+  
+  pthread_create(&sendt, NULL, &send_client_msg, (void*)serverMsg);
+}
+
 /*===== Thread Funcs =====*/
 
 // function that receives a message from client
-void* recvmg(void* client_sock) {
+void* recvmg(void* client_sock) 
+{
   Client* client = (Client*)client_sock;
   int sock = client->sockfd;
   char msg[BUFFER_SIZE] = {0};
-  int len;
+  int len = 0;
 
   // Receive client name and client channel
   if (recv(sock, msg, BUFFER_SIZE, 0) > 0) 
   {
     int pos = 0;
     string temp = msg;
-    pos = temp.find("#");
+    pos = temp.find(",");
     if (pos != std::string::npos) 
     {
-      client->nick = temp.substr(0, pos).c_str();
-      client->currChannelName = temp.substr(pos, temp.length()).c_str();
+      client->nick = temp.substr(0, pos);
+      client->currChannelName = temp.substr(pos+1, string::npos);
       client->isConnected = true;
+    }
+    else 
+    {
+      // If message was not valid, disconnect client
+      close(sock);
+      delete client;
+      return NULL;
     }
     // Add to hashmap and vector
     add_client(client);
 
-  } else {
+  } 
+  else 
+  {
     // Remove Client, close connection and end thread
     remove_client(sock);
     return NULL;
@@ -454,14 +513,18 @@ void* recvmg(void* client_sock) {
 
   // Receive Loop
   int isRunning = 1;
+  char temp_send_msg[BUFFER_SIZE] = {0};
   string command = msg;
-  size_t pos;
   string name;
+
   int namePos;
+  size_t pos;
 
   pthread_t send_tid;
   
-  while ((len = recv(sock, msg, BUFFER_SIZE, 0)) > 0) 
+  // Receive message from client 
+  // (BUFFER_SIZE - 52) length to append client's nickname, max size of 50, and ": " before message
+  while ((len = recv(sock, msg, BUFFER_SIZE - 53, 0)) > 0)
   {
     // Break if connection ended
     if (!isRunning) break;
@@ -487,10 +550,8 @@ void* recvmg(void* client_sock) {
         {
           if (!client->isMuted) 
           {
-            char* temp = new char[BUFFER_SIZE + 3]; //OBS: Nao sei se e' uma boa deixar esse +3 pro tamanho do buffer
-            sprintf(temp, "%s: %s", client->nick.c_str(), msg);
-            sendtoall(temp, sock, client->currChannelName);
-            // delete temp;
+            sprintf(temp_send_msg, "%s: %s", client->nick.c_str(), msg);
+            sendtoall(temp_send_msg, sock, client->currChannelName);
           }
           else
           {
@@ -500,7 +561,6 @@ void* recvmg(void* client_sock) {
             muteMsg->msg = pong;
             // Sends message only to client who sent ping
             pthread_create(&send_tid, NULL, &send_client_msg, (void*) muteMsg);
-            //delete muteMsg;
           }
         }
         break;
@@ -515,37 +575,44 @@ void* recvmg(void* client_sock) {
 
       case IRC::JOIN:
         namePos = command.find(" ");
-        name = command.substr(namePos + 1, command.size());
+        name = command.substr(namePos + 1, string::npos);
         name = name.substr(0, name.size() - 1);
         change_client_channel(client, name);
         break;
 
       case IRC::WHOIS:
         namePos = command.find(" ");
-        name = command.substr(namePos + 1, command.size());
+        name = command.substr(namePos + 1, string::npos);
         name = name.substr(0, name.size() - 1);
         whoIs(client, name);
         break;
 
       case IRC::MUTE:
         namePos = command.find(" ");
-        name = command.substr(namePos + 1, command.size());
+        name = command.substr(namePos + 1, string::npos);
         name = name.substr(0, name.size() - 1);
         muteOrUnmute(client, true, name);
         break;
 
       case IRC::UNMUTE:
         namePos = command.find(" ");
-        name = command.substr(namePos + 1, command.size());
+        name = command.substr(namePos + 1, string::npos);
         name = name.substr(0, name.size() - 1);
         muteOrUnmute(client, false, name);
         break;
 
       case IRC::KICK:
         namePos = command.find(" ");
-        name = command.substr(namePos + 1, command.size());
-        name = name.substr(0, name.size()-1); //OBS: isso e' pra remover o \n? se for da pra usar replace no lugar eu acho
+        name = command.substr(namePos + 1, string::npos);
+        name = name.substr(0, name.size()-1);
         kickClient(client, name);
+        break;
+
+      case IRC::NICKNAME:
+        namePos = command.find(" ");
+        name = command.substr(namePos + 1, string::npos);
+        name = name.substr(0, name.size()-1);
+        changeNickname(client, name);
         break;
     }
   }

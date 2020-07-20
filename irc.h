@@ -2,7 +2,7 @@
 #define _IRC_H_
 
 #define BUFFER_SIZE 4096
-#define DEBUG_MODE false
+#define DEBUG_MODE true
 
 namespace IRC{
 
