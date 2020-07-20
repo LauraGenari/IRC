@@ -15,7 +15,7 @@ Em uma nova janela do terminal
     - make startClient (adiciona um cliente)
 
 Opcionalmente
-    - Voce pode iniciar o server em outro ip e porta com ./server IP PORT, sendo IP o numero do ip e PORT o numero da porta.
+    - Voce pode iniciar o server em outro ip e porta com './server IP PORT', sendo IP o numero do ip e PORT o numero da porta.
     
 Orientacoes para a aplicacao cliente:
     - Apos iniciar o cliente, siga esses passos:
