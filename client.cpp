@@ -68,7 +68,7 @@ int connectUser(string *client_name) {
   }
 
   // --- Conexao com servidor --- //
-  cout << "\n===== Conectando ======\n" << endl;
+  cout << "\nConectando...\n" << endl;
   // socket configuration
   int sock = socket(AF_INET, SOCK_STREAM, 0);
   currentSock = sock;

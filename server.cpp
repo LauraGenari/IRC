@@ -276,7 +276,7 @@ void sendtoall(char* msg, int curr, string channelName)
   unordered_map<int, Client*> clientsInChannel = channels[channelName]->clients;
   // Iterate through all clients
   for (auto it = clientsInChannel.begin(); it != clientsInChannel.end(); it++) {
-    if (DEBUG_MODE) cout << endl << it->first << ": message {" << msg << "}" << endl;
+    if (DEBUG_MODE) cout << endl << it->first << " is receiving: " << msg << endl;
     int fd = it->first;
 
     // Send message to client
