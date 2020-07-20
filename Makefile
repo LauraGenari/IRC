@@ -13,7 +13,7 @@ clientDebug:
 	gdb ./clientDebug
 
 startClient: 
-	./client 2000
+	./client
 
-startServer:
-	./server 2000
+startServerLocal:
+	./server 127.0.0.1 2000

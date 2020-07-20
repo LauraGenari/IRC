@@ -65,10 +65,16 @@ int main(int argc, char* argv[]) {
 
   int sock = 0, client_fd = 0;
 
+  if(argc < 3)
+  {
+    cout << "Use ./server [IP] [PORT]" << endl;
+    exit(0);
+  }
+
   // socket configuration
   ServerIp.sin_family = AF_INET;
-  ServerIp.sin_port = htons(atoi(argv[1]));
-  ServerIp.sin_addr.s_addr = inet_addr("127.0.0.1");
+  ServerIp.sin_port = htons(atoi(argv[2]));
+  ServerIp.sin_addr.s_addr = inet_addr(argv[1]);
 
   sock = socket(AF_INET, SOCK_STREAM, 0);
   int option = 1;
@@ -257,7 +263,7 @@ void sendtoall(char* msg, int curr, string channelName)
   pthread_t send_msgt;
 
   pthread_mutex_lock(&mutex);
-  if(DEBUG_MODE)  cout << "Entering sendtoall sock fd: "  << curr << " channel: " << channelName << endl;
+  if(DEBUG_MODE)  cout << "\nEntering sendtoall sock fd: "  << curr << " channel: " << channelName << endl;
   
   // Search channel
   auto foundChannel = channels.find(channelName);
@@ -270,7 +276,7 @@ void sendtoall(char* msg, int curr, string channelName)
   unordered_map<int, Client*> clientsInChannel = channels[channelName]->clients;
   // Iterate through all clients
   for (auto it = clientsInChannel.begin(); it != clientsInChannel.end(); it++) {
-    if (DEBUG_MODE) cout << it->first << "message: " << msg << endl;
+    if (DEBUG_MODE) cout << endl << it->first << ": message {" << msg << "}" << endl;
     int fd = it->first;
 
     // Send message to client
@@ -398,7 +404,6 @@ void kickClient(Client* client, string destinationName)
         { 
           // Remove client from channel
           destChannel->second->clients.erase(destClient->sockfd);
-          //destClient->currChannelName = NULL_CHANNEL;
           destClient->isConnected = false;
         }
         pthread_mutex_unlock(&mutex);
@@ -656,8 +661,7 @@ void* send_client_msg(void* sockfd_msg) {
   while (num_fails < 5 && send(fd, msg.c_str(), msg.size(), 0) < 0) 
   {
     num_fails++;
-    // ? apagar
-    if (DEBUG_MODE) cout << "send_client_msg: failed" << num_fails << endl;
+    if (DEBUG_MODE) cout << "send_client_msg: failed " << num_fails << " times" << endl;
   }
 
   // Disconnect client if more than 5 failed tries
