@@ -480,12 +480,26 @@ void* recvmg(void* client_sock)
   {
     int pos = 0;
     string temp = msg;
+    string check_nick;
+    string check_channel;
     pos = temp.find(",");
-    if (pos != std::string::npos) 
+    if (pos != std::string::npos)
     {
-      client->nick = temp.substr(0, pos);
-      client->currChannelName = temp.substr(pos+1, string::npos);
-      client->isConnected = true;
+      check_nick = temp.substr(0, pos);
+      check_channel = temp.substr(pos+1, string::npos);
+      if( IRC::checkNick(check_nick.c_str()) && IRC::checkChannel(check_channel.c_str()) )
+      {
+        client->nick = check_nick;
+        client->currChannelName = check_channel;
+        client->isConnected = true;
+      }
+      else
+      {
+        // If message was not valid, disconnect client
+        close(sock);
+        delete client;
+        return NULL;
+      }
     }
     else 
     {

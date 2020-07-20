@@ -12,8 +12,8 @@
 
 #include "irc.h"
 
-#define STOP_FLAG 0x0001
-#define EMPTY_FLAG 0x0000
+#define STOP_FLAG 1
+#define EMPTY_FLAG 0x0
 
 using namespace std;
 
@@ -51,27 +51,24 @@ int connectUser(string *client_name) {
       << "Bem vindo ao IRC!\nPara iniciar digite o comando /connect [IP] [PORT]"
       << endl;
 
-  while (true) {
+  while (true) 
+  {
     // handles ctrl+d
-    if (cin.eof()) {
+    if (cin.eof()) 
+    {
       cout << "Obrigado por usar nosso IRC, espero que tenha se divertido!\n";
       exit(0);
     }
     cin >> command >> ip >> port;
-    // NOTA: cin ignora espaco antes e depois, entao o cara pode usar " /connect
-    // ip port" ou "/connectttt ip port" se nao acrescentar o ' ' dps.
-    // std::cout << command;
-    // if(IRC::VerifyCommand(command+" ", pos) != IRC::CONNECT){
-    // acho que nesse caso nao precisa do .find() pq a gente sabe q o comando
-    // inteiro vai ta na string command.
-    if (command != "/connect") {
+    if (command != "/connect") 
+    {
       cout << "Erro!\nDigite /connect [IP] [PORT]" << endl;
-    } else
-      break;
+    } 
+    else break;
   }
 
   // --- Conexao com servidor --- //
-  cout << "Conectando ....." << endl;
+  cout << "\n===== Conectando ======\n" << endl;
   // socket configuration
   int sock = socket(AF_INET, SOCK_STREAM, 0);
   currentSock = sock;
@@ -80,28 +77,40 @@ int connectUser(string *client_name) {
   ServerIp.sin_family = AF_INET;
   ServerIp.sin_addr.s_addr = inet_addr(ip.c_str());
 
-  if ((connect(sock, (struct sockaddr *)&ServerIp, sizeof(ServerIp))) == -1) {
+  if ((connect(sock, (struct sockaddr *)&ServerIp, sizeof(ServerIp))) == -1) 
+  {
     IRC::error("connect");
   }
 
   // -- Comando nickname -- //
   cout << "Utilize o comando /nickname seguido de seu apelido desejado\n";
   cin >> command >> *client_name;
-  while (command != "/nickname" || !IRC::checkNick(client_name->c_str())) {
-    cout << "Erro!\nUtilize o comando /nickname seguido de seu apelido "
-            "desejado\n";
+  while (command != "/nickname" || !IRC::checkNick(client_name->c_str())) 
+  {
+    // handles ctrl+d
+    if (cin.eof()) 
+    {
+      cout << "Obrigado por usar nosso IRC, espero que tenha se divertido!\n";
+      exit(0);
+    }
+    cout << "Erro!\nUtilize o comando /nickname seguido de seu apelido desejado\n";
     cin >> command >> *client_name;
   }
 
   // -- Comando join -- //
   string canal = "";
 
-  cout << "Utilize o comando /join seguido do nome do canal para entrar em um "
-          "canal!\n";
+  cout << "Utilize o comando /join seguido do nome do canal para entrar em um canal!\n";
   cin >> command >> canal;
-  while (command != "/join" || !IRC::checkChannel(canal.c_str())) {
-    cout << "Erro!\nUtilize o comando /join seguido do nome do canal para "
-            "entrar em um canal!\n";
+  while (command != "/join" || !IRC::checkChannel(canal.c_str())) 
+  {
+    // handles ctrl+d
+    if (cin.eof()) 
+    {
+      cout << "Obrigado por usar nosso IRC, espero que tenha se divertido!\n";
+      exit(0);
+    }
+    cout << "Erro!\nUtilize o comando /join seguido do nome do canal para entrar em um canal!\n";
     cin >> command >> canal;
   }
 
@@ -129,7 +138,7 @@ int main(int argc, char *argv[]) {
 
   int sock = connectUser(&client_name);
 
-  cout << "Bem vindo(a) " << client_name << endl;
+  cout << "Bem vinde " << client_name << endl;
   flag = EMPTY_FLAG;
   // creating a client thread which is always waiting for a message
   pthread_create(&recvt, NULL, recvmg, &sock);
@@ -169,7 +178,6 @@ int main(int argc, char *argv[]) {
         if(IRC::checkNick(new_nick.c_str()))
         {
           client_name = new_nick;
-          cout << client_name;
         }
         break;
       
